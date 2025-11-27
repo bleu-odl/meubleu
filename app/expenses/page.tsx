@@ -3,13 +3,12 @@
 import { createClient } from '../../lib/supabase'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-// Importamos o componente que acabamos de criar
 import NewExpenseModal from '../../components/NewExpenseModal'
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [isModalOpen, setIsModalOpen] = useState(false) // Controla se o modal está visível
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const supabase = createClient()
   const router = useRouter()
 
@@ -40,21 +39,76 @@ export default function ExpensesPage() {
     setLoading(false)
   }
 
-  // Função chamada quando clicamos em "Salvar" no Modal
   async function handleSaveExpense(newExpenseData: any) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // Envia para o Supabase
-    const { error } = await supabase.from('expenses').insert({
-      user_id: user.id,
-      ...newExpenseData
-    })
+    try {
+      // CENÁRIO 1: Variável (Salva uma vez só)
+      if (newExpenseData.type === 'variavel') {
+        const { error } = await supabase.from('expenses').insert({
+          user_id: user.id,
+          name: newExpenseData.name,
+          value: newExpenseData.value,
+          date: newExpenseData.date,
+          type: 'variavel',
+          status: 'pendente'
+        })
+        if (error) throw error
+      } 
+      // CENÁRIO 2: Fixa (Recorrência)
+      else {
+        // 1. Cria a conta MÃE
+        const { data: parentData, error: parentError } = await supabase
+          .from('expenses')
+          .insert({
+            user_id: user.id,
+            name: newExpenseData.name,
+            value: newExpenseData.value,
+            date: newExpenseData.date,
+            type: 'fixa',
+            status: 'pendente',
+            recurrence_months: newExpenseData.recurrence_months,
+            is_fixed_value: newExpenseData.is_fixed_value
+          })
+          .select()
+          .single()
 
-    if (error) {
-      alert('Erro ao criar: ' + error.message)
-    } else {
-      fetchExpenses() // Atualiza a lista na tela
+        if (parentError) throw parentError
+
+        // 2. Gera as FILHAS
+        const futureExpenses = []
+        const totalMeses = newExpenseData.recurrence_months || 1
+        
+        for (let i = 1; i < totalMeses; i++) {
+          const baseDate = new Date(newExpenseData.date)
+          baseDate.setMonth(baseDate.getMonth() + i) 
+          
+          futureExpenses.push({
+            user_id: user.id,
+            name: newExpenseData.name,
+            value: newExpenseData.is_fixed_value ? newExpenseData.value : 0, 
+            date: baseDate.toISOString(),
+            type: 'fixa',
+            status: 'pendente',
+            parent_id: parentData.id
+          })
+        }
+
+        // 3. Salva as FILHAS
+        if (futureExpenses.length > 0) {
+          const { error: childrenError } = await supabase
+            .from('expenses')
+            .insert(futureExpenses)
+          
+          if (childrenError) throw childrenError
+        }
+      }
+
+      fetchExpenses()
+
+    } catch (error: any) {
+      alert('Erro ao criar despesa: ' + error.message)
     }
   }
 
@@ -64,14 +118,13 @@ export default function ExpensesPage() {
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900">Minhas Despesas</h1>
           <button
-            onClick={() => setIsModalOpen(true)} // Abre o modal
+            onClick={() => setIsModalOpen(true)}
             className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 shadow-md transition-colors"
           >
             + Nova Despesa
           </button>
         </div>
 
-        {/* Tabela de Listagem */}
         <div className="overflow-hidden rounded-lg bg-white shadow border border-gray-100">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -95,9 +148,14 @@ export default function ExpensesPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {expense.name}
+                      {expense.type === 'fixa' && (
+                        <span className="ml-2 inline-flex items-center rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                          Fixa
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
-                      R$ {expense.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {expense.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -115,7 +173,6 @@ export default function ExpensesPage() {
           </table>
         </div>
 
-        {/* Componente Modal (Fica invisível até ser chamado) */}
         <NewExpenseModal 
           isOpen={isModalOpen} 
           onClose={() => setIsModalOpen(false)} 
