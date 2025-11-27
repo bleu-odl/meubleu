@@ -9,12 +9,27 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  
+  // ESTADOS DOS FILTROS (Começam no dia de hoje)
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()) // 0 = Janeiro
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+
   const supabase = createClient()
   const router = useRouter()
 
+  // Lista de meses para o dropdown
+  const months = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ]
+
+  // Lista de anos (do ano passado até 5 anos no futuro)
+  const years = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i)
+
+  // Recarrega sempre que mudar o filtro de Mês ou Ano
   useEffect(() => {
     fetchExpenses()
-  }, [])
+  }, [selectedMonth, selectedYear])
 
   async function fetchExpenses() {
     setLoading(true)
@@ -25,10 +40,18 @@ export default function ExpensesPage() {
       return
     }
 
+    // CALCULA O INTERVALO DE DATAS
+    // Primeiro dia do mês (Ex: 2024-11-01)
+    const startDate = new Date(selectedYear, selectedMonth, 1).toISOString()
+    // Último dia do mês (O dia 0 do mês seguinte é o último do atual)
+    const endDate = new Date(selectedYear, selectedMonth + 1, 0).toISOString()
+
     const { data, error } = await supabase
       .from('expenses')
       .select('*')
       .eq('user_id', user.id)
+      .gte('date', startDate) // "Greater Than or Equal" (Maior ou igual ao dia 1)
+      .lte('date', endDate)   // "Less Than or Equal" (Menor ou igual ao último dia)
       .order('date', { ascending: true })
 
     if (error) {
@@ -44,7 +67,7 @@ export default function ExpensesPage() {
     if (!user) return
 
     try {
-      // CENÁRIO 1: Variável (Salva uma vez só)
+      // 1. Variável
       if (newExpenseData.type === 'variavel') {
         const { error } = await supabase.from('expenses').insert({
           user_id: user.id,
@@ -56,9 +79,8 @@ export default function ExpensesPage() {
         })
         if (error) throw error
       } 
-      // CENÁRIO 2: Fixa (Recorrência)
+      // 2. Fixa
       else {
-        // 1. Cria a conta MÃE
         const { data: parentData, error: parentError } = await supabase
           .from('expenses')
           .insert({
@@ -76,7 +98,6 @@ export default function ExpensesPage() {
 
         if (parentError) throw parentError
 
-        // 2. Gera as FILHAS
         const futureExpenses = []
         const totalMeses = newExpenseData.recurrence_months || 1
         
@@ -95,7 +116,6 @@ export default function ExpensesPage() {
           })
         }
 
-        // 3. Salva as FILHAS
         if (futureExpenses.length > 0) {
           const { error: childrenError } = await supabase
             .from('expenses')
@@ -115,8 +135,13 @@ export default function ExpensesPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="mx-auto max-w-4xl">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900">Minhas Despesas</h1>
+        {/* CABEÇALHO + BOTÃO */}
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Minhas Despesas</h1>
+            <p className="text-gray-500">Gerencie seus gastos mensais</p>
+          </div>
+          
           <button
             onClick={() => setIsModalOpen(true)}
             className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 shadow-md transition-colors"
@@ -125,6 +150,36 @@ export default function ExpensesPage() {
           </button>
         </div>
 
+        {/* BARRA DE FILTROS */}
+        <div className="mb-6 flex items-center gap-4 rounded-lg bg-white p-4 shadow-sm border border-gray-100">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Mês</label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              className="rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
+            >
+              {months.map((month, index) => (
+                <option key={index} value={index}>{month}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Ano</label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
+            >
+              {years.map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* TABELA */}
         <div className="overflow-hidden rounded-lg bg-white shadow border border-gray-100">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -137,9 +192,14 @@ export default function ExpensesPage() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
-                <tr><td colSpan={4} className="p-6 text-center text-gray-500">Carregando...</td></tr>
+                <tr><td colSpan={4} className="p-8 text-center text-gray-500">Carregando contas...</td></tr>
               ) : expenses.length === 0 ? (
-                <tr><td colSpan={4} className="p-10 text-center text-gray-500">Nenhuma conta lançada ainda.</td></tr>
+                <tr>
+                  <td colSpan={4} className="p-12 text-center flex flex-col items-center justify-center text-gray-500">
+                    <p className="text-lg font-medium">Tudo limpo por aqui! 🎉</p>
+                    <p className="text-sm">Nenhuma despesa encontrada para {months[selectedMonth]} de {selectedYear}.</p>
+                  </td>
+                </tr>
               ) : (
                 expenses.map((expense) => (
                   <tr key={expense.id} className="hover:bg-gray-50 transition-colors">
