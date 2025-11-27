@@ -3,6 +3,7 @@
 import { createClient } from '../../lib/supabase'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { CreditCard } from 'lucide-react' // Importação do ícone (opcional, mas bom ter)
 import NewExpenseModal from '../../components/NewExpenseModal'
 
 export default function ExpensesPage() {
@@ -10,23 +11,19 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   
-  // ESTADOS DOS FILTROS (Começam no dia de hoje)
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()) // 0 = Janeiro
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()) 
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
   const supabase = createClient()
   const router = useRouter()
 
-  // Lista de meses para o dropdown
   const months = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ]
 
-  // Lista de anos (do ano passado até 5 anos no futuro)
   const years = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i)
 
-  // Recarrega sempre que mudar o filtro de Mês ou Ano
   useEffect(() => {
     fetchExpenses()
   }, [selectedMonth, selectedYear])
@@ -40,18 +37,15 @@ export default function ExpensesPage() {
       return
     }
 
-    // CALCULA O INTERVALO DE DATAS
-    // Primeiro dia do mês (Ex: 2024-11-01)
     const startDate = new Date(selectedYear, selectedMonth, 1).toISOString()
-    // Último dia do mês (O dia 0 do mês seguinte é o último do atual)
     const endDate = new Date(selectedYear, selectedMonth + 1, 0).toISOString()
 
     const { data, error } = await supabase
       .from('expenses')
       .select('*')
       .eq('user_id', user.id)
-      .gte('date', startDate) // "Greater Than or Equal" (Maior ou igual ao dia 1)
-      .lte('date', endDate)   // "Less Than or Equal" (Menor ou igual ao último dia)
+      .gte('date', startDate)
+      .lte('date', endDate)
       .order('date', { ascending: true })
 
     if (error) {
@@ -67,7 +61,6 @@ export default function ExpensesPage() {
     if (!user) return
 
     try {
-      // 1. Variável
       if (newExpenseData.type === 'variavel') {
         const { error } = await supabase.from('expenses').insert({
           user_id: user.id,
@@ -75,11 +68,11 @@ export default function ExpensesPage() {
           value: newExpenseData.value,
           date: newExpenseData.date,
           type: 'variavel',
-          status: 'pendente'
+          status: 'pendente',
+          is_credit_card: newExpenseData.is_credit_card
         })
         if (error) throw error
       } 
-      // 2. Fixa
       else {
         const { data: parentData, error: parentError } = await supabase
           .from('expenses')
@@ -91,7 +84,8 @@ export default function ExpensesPage() {
             type: 'fixa',
             status: 'pendente',
             recurrence_months: newExpenseData.recurrence_months,
-            is_fixed_value: newExpenseData.is_fixed_value
+            is_fixed_value: newExpenseData.is_fixed_value,
+            is_credit_card: newExpenseData.is_credit_card
           })
           .select()
           .single()
@@ -112,7 +106,8 @@ export default function ExpensesPage() {
             date: baseDate.toISOString(),
             type: 'fixa',
             status: 'pendente',
-            parent_id: parentData.id
+            parent_id: parentData.id,
+            is_credit_card: newExpenseData.is_credit_card
           })
         }
 
@@ -135,7 +130,6 @@ export default function ExpensesPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="mx-auto max-w-4xl">
-        {/* CABEÇALHO + BOTÃO */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Minhas Despesas</h1>
@@ -150,7 +144,6 @@ export default function ExpensesPage() {
           </button>
         </div>
 
-        {/* BARRA DE FILTROS */}
         <div className="mb-6 flex items-center gap-4 rounded-lg bg-white p-4 shadow-sm border border-gray-100">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-gray-500 uppercase">Mês</label>
@@ -179,15 +172,14 @@ export default function ExpensesPage() {
           </div>
         </div>
 
-        {/* TABELA */}
         <div className="overflow-hidden rounded-lg bg-white shadow border border-gray-100">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Data</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Descrição</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Valor</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Data</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Descrição</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Valor</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -203,20 +195,39 @@ export default function ExpensesPage() {
               ) : (
                 expenses.map((expense) => (
                   <tr key={expense.id} className="hover:bg-gray-50 transition-colors">
+                    
+                    {/* DATA */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {new Date(expense.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {expense.name}
-                      {expense.type === 'fixa' && (
-                        <span className="ml-2 inline-flex items-center rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                          Fixa
-                        </span>
-                      )}
+
+                    {/* DESCRIÇÃO (AQUI ESTAVA O PROBLEMA) */}
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      <div className="flex items-center gap-2">
+                         {/* Etiqueta Roxa de Cartão */}
+                         {expense.is_credit_card && (
+                            <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 whitespace-nowrap">
+                              Cartão de Crédito
+                            </span>
+                          )}
+                          
+                          <span>{expense.name}</span>
+
+                          {/* Etiqueta Azul de Fixa */}
+                          {expense.type === 'fixa' && (
+                            <span className="inline-flex items-center rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 whitespace-nowrap">
+                              Fixa
+                            </span>
+                          )}
+                      </div>
                     </td>
+
+                    {/* VALOR */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
                       R$ {expense.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
+
+                    {/* STATUS */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         expense.status === 'pago' 

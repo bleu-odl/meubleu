@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { CreditCard } from 'lucide-react' // Importamos o ícone
 
 interface NewExpenseModalProps {
   isOpen: boolean
@@ -13,10 +14,13 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState('')
   
-  // NOVOS ESTADOS DA V0.3
-  const [type, setType] = useState('variavel') // 'variavel' ou 'fixa'
-  const [recurrence, setRecurrence] = useState('') // Quantos meses?
-  const [isFixedValue, setIsFixedValue] = useState(false) // Valor é fixo?
+  // Estados v0.3 + v0.8
+  const [type, setType] = useState('variavel') 
+  const [recurrence, setRecurrence] = useState('') 
+  const [isFixedValue, setIsFixedValue] = useState(false)
+  
+  // NOVO: Estado para Cartão de Crédito
+  const [isCreditCard, setIsCreditCard] = useState(false)
 
   const [isLoading, setIsLoading] = useState(false)
 
@@ -26,27 +30,28 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
     e.preventDefault()
     setIsLoading(true)
     
-    // Monta o objeto com as novidades da v0.3
     const newExpense = {
       name,
       value: parseFloat(amount.replace(',', '.')),
       date,
       type, 
       status: 'pendente',
-      // Se for fixa, manda os dados extras. Se não, manda null.
       recurrence_months: type === 'fixa' ? parseInt(recurrence) : null,
-      is_fixed_value: type === 'fixa' ? isFixedValue : false
+      is_fixed_value: type === 'fixa' ? isFixedValue : false,
+      // NOVO: Envia a flag pro banco
+      is_credit_card: isCreditCard
     }
 
     await onSave(newExpense)
     
-    // Limpa o formulário
+    // Limpa tudo
     setName('')
     setAmount('')
     setDate('')
     setType('variavel')
     setRecurrence('')
     setIsFixedValue(false)
+    setIsCreditCard(false) // Reset
     setIsLoading(false)
     onClose()
   }
@@ -61,7 +66,6 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
 
         <form onSubmit={handleSubmit} className="space-y-4">
           
-          {/* ABAS DE SELEÇÃO (Variável vs Fixa) */}
           <div className="flex rounded-md bg-gray-100 p-1">
             <button
               type="button"
@@ -83,7 +87,6 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
             </button>
           </div>
 
-          {/* Nome */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Descrição</label>
             <input
@@ -96,7 +99,6 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
             />
           </div>
 
-          {/* Valor */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Valor (R$)</label>
             <input
@@ -110,7 +112,30 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
             />
           </div>
 
-          {/* Data */}
+          {/* NOVO: Checkbox de Cartão de Crédito */}
+          <div 
+            className={`flex items-center gap-2 rounded-md border p-3 cursor-pointer transition-colors ${
+              isCreditCard ? 'bg-purple-50 border-purple-200' : 'border-gray-200 hover:bg-gray-50'
+            }`}
+            onClick={() => setIsCreditCard(!isCreditCard)}
+          >
+            <div className={`rounded-full p-1 ${isCreditCard ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'}`}>
+              <CreditCard size={18} />
+            </div>
+            <div className="flex-1">
+              <span className={`text-sm font-medium ${isCreditCard ? 'text-purple-900' : 'text-gray-700'}`}>
+                É fatura de cartão?
+              </span>
+              <p className="text-xs text-gray-500">Marca essa conta como cartão de crédito</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={isCreditCard}
+              onChange={(e) => setIsCreditCard(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 pointer-events-none"
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700">
               {type === 'fixa' ? 'Vencimento (1ª Parcela)' : 'Vencimento'}
@@ -124,7 +149,6 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
             />
           </div>
 
-          {/* CAMPOS EXTRAS (Aparecem só se for Fixa) */}
           {type === 'fixa' && (
             <div className="rounded-md bg-blue-50 p-3 space-y-3 border border-blue-100 animate-in fade-in slide-in-from-top-2">
               <div>
@@ -153,11 +177,6 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
                   Valor é fixo? (Replica o valor em todas)
                 </label>
               </div>
-              <p className="text-xs text-blue-600">
-                {isFixedValue 
-                  ? "O sistema vai criar todas as parcelas já com o valor preenchido."
-                  : "O sistema vai criar as parcelas com valor zerado para você preencher mês a mês."}
-              </p>
             </div>
           )}
 
