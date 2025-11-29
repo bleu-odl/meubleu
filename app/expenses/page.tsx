@@ -11,12 +11,13 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   
-  // --- FILTROS DE DATA (Buscam no Banco) ---
+  // --- FILTROS DE DATA ---
+  // -1 significa "Todo o Período"
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()) 
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
   // --- NOVOS FILTROS (Filtram na Tela) ---
-  const [searchTerm, setSearchTerm] = useState('')      // Busca por nome
+  const [searchTerm, setSearchTerm] = useState('')      
   const [filterStatus, setFilterStatus] = useState('todos') 
   const [filterType, setFilterType] = useState('todos')     
 
@@ -55,40 +56,45 @@ export default function ExpensesPage() {
       return
     }
 
-    const startDate = new Date(selectedYear, selectedMonth, 1).toISOString()
-    const endDate = new Date(selectedYear, selectedMonth + 1, 0).toISOString()
-
-    const { data, error } = await supabase
+    // Começa montando a query básica (pega tudo do usuário)
+    let query = supabase
       .from('expenses')
       .select('*')
       .eq('user_id', user.id)
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: true })
+
+    // Se o mês NÃO for -1 (ou seja, não é "Todo o Período"), aplicamos o filtro de data
+    if (selectedMonth !== -1) {
+      const yearStr = selectedYear
+      const monthStr = String(selectedMonth + 1).padStart(2, '0') 
+      const startDate = `${yearStr}-${monthStr}-01`
+      const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate()
+      const endDate = `${yearStr}-${monthStr}-${lastDay}`
+
+      query = query.gte('date', startDate).lte('date', endDate)
+    }
+
+    // Executa a query com ordenação
+    const { data, error } = await query.order('date', { ascending: true })
 
     if (error) {
-      alert('Erro ao buscar: ' + error.message)
+      console.error('Erro ao buscar:', error.message)
     } else {
       setExpenses(data || [])
     }
     setLoading(false)
   }
 
-  // --- LÓGICA DE FILTRAGEM AVANÇADA (Agora com Busca por Nome) ---
+  // Filtros em memória
   const filteredExpenses = expenses.filter(expense => {
     const matchStatus = filterStatus === 'todos' ? true : expense.status === filterStatus
     const matchType = filterType === 'todos' ? true : expense.type === filterType
-    
-    // Filtro de Texto (Case insensitive)
     const matchSearch = expense.name.toLowerCase().includes(searchTerm.toLowerCase())
-
     return matchStatus && matchType && matchSearch
   })
 
-  // --- CÁLCULO DO TOTAL (Soma apenas o que aparece na tela) ---
   const totalAmount = filteredExpenses.reduce((acc, curr) => acc + (curr.value || 0), 0)
 
-  // --- FUNÇÕES DE AÇÃO (Mantidas) ---
+  // Ações
   function handleToggleMenu(id: string) {
     if (openMenuId === id) setOpenMenuId(null); else setOpenMenuId(id)
   }
@@ -126,22 +132,74 @@ export default function ExpensesPage() {
   async function handleSaveExpense(newExpenseData: any) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+
     try {
       if (newExpenseData.type === 'variavel') {
-        await supabase.from('expenses').insert({ user_id: user.id, ...newExpenseData, status: 'pendente' })
-      } else {
-        const { data: parent } = await supabase.from('expenses').insert({ user_id: user.id, ...newExpenseData, status: 'pendente' }).select().single()
-        if(parent) {
-           const futures = []; const total = newExpenseData.recurrence_months || 1
-           for(let i=1; i<total; i++) {
-             const d = new Date(newExpenseData.date); d.setMonth(d.getMonth()+i);
-             futures.push({ user_id: user.id, name: newExpenseData.name, value: newExpenseData.is_fixed_value ? newExpenseData.value : 0, date: d.toISOString(), type: 'fixa', status: 'pendente', parent_id: parent.id, is_credit_card: newExpenseData.is_credit_card })
-           }
-           if(futures.length > 0) await supabase.from('expenses').insert(futures)
+        const { error } = await supabase.from('expenses').insert({
+          user_id: user.id,
+          name: newExpenseData.name,
+          value: newExpenseData.value,
+          date: newExpenseData.date,
+          type: 'variavel',
+          status: 'pendente',
+          is_credit_card: newExpenseData.is_credit_card
+        })
+        if(error) throw error
+      } 
+      else {
+        // Fixa (Recorrência)
+        const { data: parentData, error: parentError } = await supabase
+          .from('expenses')
+          .insert({
+            user_id: user.id,
+            name: newExpenseData.name,
+            value: newExpenseData.value,
+            date: newExpenseData.date,
+            type: 'fixa',
+            status: 'pendente',
+            recurrence_months: newExpenseData.recurrence_months,
+            is_fixed_value: newExpenseData.is_fixed_value,
+            is_credit_card: newExpenseData.is_credit_card
+          })
+          .select().single()
+
+        if (parentError) throw parentError
+
+        const futureExpenses = []
+        const totalMeses = newExpenseData.recurrence_months || 1
+        
+        for (let i = 1; i < totalMeses; i++) {
+          const d = new Date(newExpenseData.date)
+          d.setDate(15) 
+          d.setMonth(d.getMonth() + i)
+          
+          const originalDay = new Date(newExpenseData.date).getDate()
+          const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+          d.setDate(Math.min(originalDay, maxDay))
+
+          futureExpenses.push({
+            user_id: user.id,
+            name: newExpenseData.name,
+            value: newExpenseData.is_fixed_value ? newExpenseData.value : 0, 
+            date: d.toISOString(),
+            type: 'fixa',
+            status: 'pendente',
+            parent_id: parentData.id,
+            is_credit_card: newExpenseData.is_credit_card
+          })
+        }
+
+        if (futureExpenses.length > 0) {
+          const { error: childrenError } = await supabase.from('expenses').insert(futureExpenses)
+          if(childrenError) throw childrenError
         }
       }
-      fetchExpenses()
-    } catch (e: any) { alert('Erro: ' + e.message) }
+
+      fetchExpenses() 
+
+    } catch (error: any) {
+      alert('Erro ao criar despesa: ' + error.message)
+    }
   }
 
   return (
@@ -153,68 +211,63 @@ export default function ExpensesPage() {
             <p className="text-gray-500">Gerencie suas despesas</p>
           </div>
           <button onClick={() => setIsModalOpen(true)} className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 shadow-md">
-            + Nova Despesa
+            Novo Lançamento
           </button>
         </div>
 
-        {/* --- BARRA DE FILTROS COMPLETA --- */}
+        {/* --- FILTROS --- */}
         <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex flex-wrap gap-4 items-end">
           
-          {/* Busca por Texto (NOVO) */}
           <div className="flex-1 min-w-[200px]">
-            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-1">
-                <Search size={12}/> Buscar Despesa
-            </label>
+            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-1"><Search size={12}/> Buscar</label>
             <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input 
-                    type="text" 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Ex: Netflix, Mercado..."
-                    className="w-full rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-sm bg-gray-50 focus:ring-blue-500 focus:border-blue-500"
-                />
+                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Ex: Netflix..." className="w-full rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-sm bg-gray-50"/>
             </div>
           </div>
 
           <div className="h-8 w-px bg-gray-200 hidden sm:block mx-2"></div>
 
-          {/* Mês e Ano */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-gray-500 uppercase">Período</label>
-            <div className="flex gap-2">
-                <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50 focus:ring-blue-500 focus:border-blue-500">
-                {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                </select>
-                <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50 focus:ring-blue-500 focus:border-blue-500">
-                {years.map((y) => <option key={y} value={y}>{y}</option>)}
-                </select>
+          <div className="flex gap-2">
+            <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-500 uppercase">Período</label>
+                <div className="flex gap-2">
+                    <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50">
+                        {/* OPÇÃO DE TODO O PERÍODO */}
+                        <option value={-1}>Todo o Período</option>
+                        {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                    </select>
+                    {/* Desabilita o Ano se "Todo o Período" estiver selecionado */}
+                    <select 
+                        value={selectedYear} 
+                        onChange={(e) => setSelectedYear(parseInt(e.target.value))} 
+                        className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50 disabled:opacity-50 disabled:bg-gray-100"
+                        disabled={selectedMonth === -1}
+                    >
+                        {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                </div>
             </div>
           </div>
 
-          <div className="h-8 w-px bg-gray-200 hidden sm:block mx-2"></div>
-
-          {/* Filtros Extras */}
           <div className="flex gap-2">
             <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 uppercase">Status</label>
-                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50 focus:ring-blue-500 focus:border-blue-500 w-32">
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50 w-32">
                 <option value="todos">Todos</option>
                 <option value="pago">✅ Pagos</option>
                 <option value="pendente">⚠️ Pendentes</option>
                 </select>
             </div>
-
             <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 uppercase">Tipo</label>
-                <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50 focus:ring-blue-500 focus:border-blue-500 w-32">
+                <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50 w-32">
                 <option value="todos">Todos</option>
                 <option value="variavel">Variáveis</option>
                 <option value="fixa">Fixas</option>
                 </select>
             </div>
           </div>
-
         </div>
 
         {/* TABELA */}
@@ -222,7 +275,8 @@ export default function ExpensesPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Data</th>
+                {/* CABEÇALHO ATUALIZADO */}
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Data de Vencimento</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Descrição</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Valor</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
@@ -233,7 +287,7 @@ export default function ExpensesPage() {
               {loading ? (
                 <tr><td colSpan={5} className="p-8 text-center text-gray-500">Carregando...</td></tr>
               ) : filteredExpenses.length === 0 ? (
-                <tr><td colSpan={5} className="p-12 text-center text-gray-500">Nenhuma despesa encontrada com estes filtros.</td></tr>
+                <tr><td colSpan={5} className="p-12 text-center text-gray-500">Nenhuma despesa encontrada.</td></tr>
               ) : (
                 filteredExpenses.map((expense) => (
                   <tr key={expense.id} className="hover:bg-gray-50 transition-colors group relative">
@@ -280,7 +334,7 @@ export default function ExpensesPage() {
           </table>
         </div>
 
-        {/* --- RODAPÉ COM TOTALIZADOR FIXO --- */}
+        {/* Rodapé Total */}
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] md:pl-64 z-40">
            <div className="mx-auto max-w-5xl flex items-center justify-between">
               <div>

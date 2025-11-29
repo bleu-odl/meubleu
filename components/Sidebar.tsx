@@ -1,10 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { LayoutDashboard, List, User, LogOut, Wallet } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { LayoutDashboard, List, User, LogOut, Wallet, Tags } from 'lucide-react'
 import { createClient } from '../lib/supabase'
-import { useRouter } from 'next/navigation'
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -18,7 +17,8 @@ export function Sidebar() {
 
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Extrato', path: '/expenses', icon: List },
+    { name: 'Lançamentos', path: '/expenses', icon: List },
+    { name: 'Minhas Contas', path: '/accounts', icon: Tags }, // Item novo
     { name: 'Perfil', path: '/profile', icon: User },
   ]
 
