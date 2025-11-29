@@ -18,7 +18,7 @@ export function Sidebar() {
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Lançamentos', path: '/expenses', icon: List },
-    { name: 'Minhas Contas', path: '/accounts', icon: Tags }, // Item novo
+    { name: 'Minhas Despesas', path: '/accounts', icon: Tags }, // Item novo
     { name: 'Perfil', path: '/profile', icon: User },
   ]
 

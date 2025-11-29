@@ -32,7 +32,7 @@ export default function ExpensesPage() {
   const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
   const years = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i)
 
-  // Função para gerar cor de fundo suave (Pastel consistente)
+  // Função para gerar cor de fundo suave
   const hexToRgba = (hex: string, alpha: number) => {
     const cleanHex = hex.replace('#', '');
     const fullHex = cleanHex.length === 3 ? cleanHex.split('').map(char => char + char).join('') : cleanHex;
@@ -153,7 +153,6 @@ export default function ExpensesPage() {
     } catch (error: any) { alert('Erro: ' + error.message) }
   }
 
-  // Classe padrão para TODOS os pills (Garante geometria idêntica)
   const pillBaseClass = "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap transition-colors"
 
   return (
@@ -170,12 +169,19 @@ export default function ExpensesPage() {
           </button>
         </div>
 
+        {/* FILTROS COM VISUAL MELHORADO */}
         <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-[200px]">
             <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-1"><Search size={12}/> Buscar</label>
             <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Ex: Netflix..." className="w-full rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-sm bg-gray-50"/>
+                <input 
+                  type="text" 
+                  value={searchTerm} 
+                  onChange={(e) => setSearchTerm(e.target.value)} 
+                  placeholder="Ex: Netflix..." 
+                  className="w-full rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-sm bg-white text-gray-900 focus:ring-blue-500 focus:border-blue-500" // Texto escuro
+                />
             </div>
           </div>
           <div className="h-8 w-px bg-gray-200 hidden sm:block mx-2"></div>
@@ -183,11 +189,12 @@ export default function ExpensesPage() {
             <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 uppercase">Período</label>
                 <div className="flex gap-2">
-                    <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50">
+                    {/* Selects com fundo branco e texto preto */}
+                    <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="rounded-md border-gray-300 py-1.5 text-sm bg-white text-gray-900 focus:ring-blue-500 focus:border-blue-500">
                         <option value={-1}>Todo o Período</option>
                         {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
                     </select>
-                    <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50 disabled:opacity-50" disabled={selectedMonth === -1}>
+                    <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="rounded-md border-gray-300 py-1.5 text-sm bg-white text-gray-900 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50" disabled={selectedMonth === -1}>
                         {years.map((y) => <option key={y} value={y}>{y}</option>)}
                     </select>
                 </div>
@@ -196,7 +203,7 @@ export default function ExpensesPage() {
           <div className="flex gap-2">
             <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 uppercase">Status</label>
-                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50 w-32">
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-md border-gray-300 py-1.5 text-sm bg-white text-gray-900 w-32 focus:ring-blue-500 focus:border-blue-500">
                 <option value="todos">Todos</option>
                 <option value="pago">✅ Pagos</option>
                 <option value="pendente">⚠️ Pendentes</option>
@@ -204,7 +211,7 @@ export default function ExpensesPage() {
             </div>
             <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 uppercase">Tipo</label>
-                <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="rounded-md border-gray-300 py-1.5 text-sm bg-gray-50 w-32">
+                <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="rounded-md border-gray-300 py-1.5 text-sm bg-white text-gray-900 w-32 focus:ring-blue-500 focus:border-blue-500">
                 <option value="todos">Todos</option>
                 <option value="variavel">Variáveis</option>
                 <option value="fixa">Fixas</option>
@@ -213,6 +220,7 @@ export default function ExpensesPage() {
           </div>
         </div>
 
+        {/* TABELA */}
         <div className="overflow-hidden rounded-lg bg-white shadow border border-gray-100 min-h-[300px]">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -232,55 +240,28 @@ export default function ExpensesPage() {
               ) : (
                 filteredExpenses.map((expense) => {
                   const badgeColor = accountsMap[expense.name] || '#6b7280'
-                  
                   return (
                     <tr key={expense.id} className="hover:bg-gray-50 transition-colors group relative">
-                      
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {editingId === expense.id ? <input type="date" value={editValues.date} onChange={(e)=>setEditValues({...editValues, date: e.target.value})} className="border p-1 rounded w-full"/> : new Date(expense.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                       </td>
-                      
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">
                         <div className="flex items-center gap-2">
-                          {/* 1. Pill da Descrição (Conta) */}
-                          <span 
-                            className={pillBaseClass}
-                            style={{ 
-                                backgroundColor: hexToRgba(badgeColor, 0.1), // Fundo suave (10%)
-                                color: badgeColor // Texto na cor original
-                            }}
-                          >
+                          <span className={pillBaseClass} style={{ backgroundColor: hexToRgba(badgeColor, 0.1), color: badgeColor }}>
                             {expense.is_credit_card && <CreditCard size={12} className="mr-1.5 opacity-80"/>}
                             {expense.name}
                           </span>
-
-                          {/* 2. Pill de Fixa (Estilo alinhado) */}
-                          {expense.type === 'fixa' && (
-                            <span className={`${pillBaseClass} bg-blue-50 text-blue-600 border border-blue-100`}>
-                              Fixa
-                            </span>
-                          )}
+                          {expense.type === 'fixa' && <span className={`${pillBaseClass} bg-blue-50 text-blue-600 border border-blue-100`}>Fixa</span>}
                         </div>
                       </td>
-
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
                         {editingId === expense.id ? <input type="number" step="0.01" value={editValues.value} onChange={(e)=>setEditValues({...editValues, value: e.target.value})} className="w-24 border p-1 rounded"/> : `R$ ${expense.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                       </td>
-
-                      {/* 3. Pill de Status (Estilo alinhado) */}
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <button 
-                          onClick={()=>handleToggleStatus(expense.id, expense.status)} 
-                          className={`${pillBaseClass} cursor-pointer hover:opacity-80 ${
-                            expense.status === 'pago' 
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' // Verde mais suave
-                              : 'bg-amber-50 text-amber-700 border border-amber-100' // Amarelo mais suave
-                          }`}
-                        >
+                        <button onClick={()=>handleToggleStatus(expense.id, expense.status)} className={`${pillBaseClass} cursor-pointer hover:opacity-80 ${expense.status === 'pago' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
                           {expense.status === 'pago' ? 'Pago' : 'Pendente'}
                         </button>
                       </td>
-
                       <td className="px-6 py-4 text-right text-sm font-medium relative">
                         {editingId === expense.id ? (
                           <div className="flex justify-end gap-2">

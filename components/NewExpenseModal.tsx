@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { CreditCard } from 'lucide-react'
-import { createClient } from '../lib/supabase' // Importamos para buscar as contas
+import { createClient } from '../lib/supabase'
 
 interface NewExpenseModalProps {
   isOpen: boolean
@@ -11,7 +10,6 @@ interface NewExpenseModalProps {
 }
 
 export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseModalProps) {
-  // ESTADOS DO FORMULÁRIO
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState('')
@@ -21,11 +19,9 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
   const [isCreditCard, setIsCreditCard] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  // ESTADO PARA A LISTA DE CONTAS (DO BANCO)
   const [availableAccounts, setAvailableAccounts] = useState<any[]>([])
   const supabase = createClient()
 
-  // Busca as contas cadastradas quando o modal abre
   useEffect(() => {
     if (isOpen) {
       fetchAccounts()
@@ -39,7 +35,6 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
     setAvailableAccounts(data || [])
   }
 
-  // Quando escolhe uma conta na lista, verifica se ela é cartão automaticamente
   function handleAccountChange(accountName: string) {
     setName(accountName)
     const account = availableAccounts.find(a => a.name === accountName)
@@ -57,7 +52,7 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
     setIsLoading(true)
     
     const newExpense = {
-      name, // Aqui vai o nome selecionado na lista
+      name,
       value: parseFloat(amount.replace(',', '.')),
       date,
       type, 
@@ -69,7 +64,6 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
 
     await onSave(newExpense)
     
-    // Reset
     setName('')
     setAmount('')
     setDate('')
@@ -96,7 +90,6 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
             <button type="button" onClick={() => setType('fixa')} className={`flex-1 rounded-md py-1 text-sm font-medium transition-all ${type === 'fixa' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Fixa</button>
           </div>
 
-          {/* LISTA SUSPENSA DE CONTAS */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Conta / Descrição</label>
             <select
@@ -108,27 +101,18 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
               <option value="">Selecione uma conta...</option>
               {availableAccounts.map(acc => (
                 <option key={acc.id} value={acc.name}>
-                  {acc.name} {acc.is_credit_card ? '(Cartão)' : ''}
+                  {acc.name}
                 </option>
               ))}
             </select>
             {availableAccounts.length === 0 && (
-                <p className="text-xs text-red-500 mt-1">Nenhuma conta cadastrada. Vá em "Minhas Contas" primeiro.</p>
+                <p className="text-xs text-red-500 mt-1">Nenhuma conta cadastrada. Vá em "Minhas Despesas" primeiro.</p>
             )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">Valor (R$)</label>
             <input required type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 block w-full rounded-md border border-gray-300 p-2 focus:ring-blue-500" placeholder="0.00"/>
-          </div>
-
-          {/* Checkbox automático (mas o usuário pode mudar se quiser) */}
-          <div className={`flex items-center gap-2 rounded-md border p-3 cursor-pointer transition-colors ${isCreditCard ? 'bg-purple-50 border-purple-200' : 'border-gray-200'}`} onClick={() => setIsCreditCard(!isCreditCard)}>
-            <div className={`rounded-full p-1 ${isCreditCard ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'}`}><CreditCard size={18} /></div>
-            <div className="flex-1">
-              <span className={`text-sm font-medium ${isCreditCard ? 'text-purple-900' : 'text-gray-700'}`}>É fatura de cartão?</span>
-            </div>
-            <input type="checkbox" checked={isCreditCard} onChange={(e) => setIsCreditCard(e.target.checked)} className="h-4 w-4 rounded text-purple-600 pointer-events-none"/>
           </div>
 
           <div>
