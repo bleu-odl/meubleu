@@ -5,12 +5,21 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { MoreVertical, Edit2, Trash2, Save, X, Filter, Search, CreditCard } from 'lucide-react'
 import NewExpenseModal from '../../components/NewExpenseModal'
+// 1. IMPORTAÇÃO DOS NOVOS MODAIS
+import CreditCardModal from '../../components/CreditCardModal'
+import UpgradeModal from '../../components/UpgradeModal'
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   
+  // 2. NOVOS ESTADOS PARA O CARTÃO E PLANO
+  const [userPlan, setUserPlan] = useState('free')
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
+  const [selectedCardName, setSelectedCardName] = useState('')
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+
   const [accountsMap, setAccountsMap] = useState<Record<string, string>>({})
 
   // Filtros
@@ -32,7 +41,6 @@ export default function ExpensesPage() {
   const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
   const years = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i)
 
-  // Função para gerar cor de fundo suave
   const hexToRgba = (hex: string, alpha: number) => {
     const cleanHex = hex.replace('#', '');
     const fullHex = cleanHex.length === 3 ? cleanHex.split('').map(char => char + char).join('') : cleanHex;
@@ -64,6 +72,13 @@ export default function ExpensesPage() {
       router.push('/login')
       return
     }
+
+    // 3. BUSCAR O PLANO DO USUÁRIO
+    const { data: userData } = await supabase.from('users').select('plano').eq('id', user.id).single()
+    console.log("🔍 PLANO NO BANCO:", userData) 
+    
+    if (userData) setUserPlan(userData.plano)
+    if (userData) setUserPlan(userData.plano)
 
     const { data: accounts } = await supabase.from('accounts').select('name, color').eq('user_id', user.id)
     
@@ -102,7 +117,22 @@ export default function ExpensesPage() {
 
   const totalAmount = filteredExpenses.reduce((acc, curr) => acc + (curr.value || 0), 0)
 
-  // Actions
+  // 4. LÓGICA DO CLIQUE NA ETIQUETA
+  function handleCardClick(expense: any) {
+    // Se não for cartão, não faz nada
+    if (!expense.is_credit_card) return
+
+    // Se for Free, mostra bloqueio
+    if (userPlan === 'free') {
+      setShowUpgradeModal(true)
+    } 
+    // Se for Premium, abre gestão
+    else {
+      setSelectedCardId(expense.id)
+      setSelectedCardName(expense.name)
+    }
+  }
+
   function handleToggleMenu(id: string) { if (openMenuId === id) setOpenMenuId(null); else setOpenMenuId(id) }
   function handleStartEdit(expense: any) { setEditingId(expense.id); setEditValues({ date: expense.date.split('T')[0], value: expense.value.toString() }); setOpenMenuId(null) }
   function handleCancelEdit() { setEditingId(null); setEditValues({ date: '', value: '' }) }
@@ -169,19 +199,12 @@ export default function ExpensesPage() {
           </button>
         </div>
 
-        {/* FILTROS COM VISUAL MELHORADO */}
         <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-[200px]">
             <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-1"><Search size={12}/> Buscar</label>
             <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input 
-                  type="text" 
-                  value={searchTerm} 
-                  onChange={(e) => setSearchTerm(e.target.value)} 
-                  placeholder="Ex: Netflix..." 
-                  className="w-full rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-sm bg-white text-gray-900 focus:ring-blue-500 focus:border-blue-500" // Texto escuro
-                />
+                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Ex: Netflix..." className="w-full rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-sm bg-white text-gray-900 focus:ring-blue-500 focus:border-blue-500"/>
             </div>
           </div>
           <div className="h-8 w-px bg-gray-200 hidden sm:block mx-2"></div>
@@ -189,7 +212,6 @@ export default function ExpensesPage() {
             <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 uppercase">Período</label>
                 <div className="flex gap-2">
-                    {/* Selects com fundo branco e texto preto */}
                     <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="rounded-md border-gray-300 py-1.5 text-sm bg-white text-gray-900 focus:ring-blue-500 focus:border-blue-500">
                         <option value={-1}>Todo o Período</option>
                         {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
@@ -220,7 +242,6 @@ export default function ExpensesPage() {
           </div>
         </div>
 
-        {/* TABELA */}
         <div className="overflow-hidden rounded-lg bg-white shadow border border-gray-100 min-h-[300px]">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -247,7 +268,12 @@ export default function ExpensesPage() {
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">
                         <div className="flex items-center gap-2">
-                          <span className={pillBaseClass} style={{ backgroundColor: hexToRgba(badgeColor, 0.1), color: badgeColor }}>
+                          <span 
+                            // 5. AQUI ESTÁ O CLICK
+                            onClick={() => handleCardClick(expense)}
+                            className={`${pillBaseClass} ${expense.is_credit_card ? 'cursor-pointer hover:ring-2 ring-offset-1 ring-purple-200' : ''}`}
+                            style={{ backgroundColor: hexToRgba(badgeColor, 0.1), color: badgeColor }}
+                          >
                             {expense.is_credit_card && <CreditCard size={12} className="mr-1.5 opacity-80"/>}
                             {expense.name}
                           </span>
@@ -305,6 +331,21 @@ export default function ExpensesPage() {
           onClose={() => setIsModalOpen(false)} 
           onSave={handleSaveExpense}
         />
+
+        {/* 6. MODAIS DO CARTÃO */}
+        <CreditCardModal 
+          isOpen={!!selectedCardId} 
+          onClose={() => setSelectedCardId(null)}
+          expenseId={selectedCardId || ''}
+          expenseName={selectedCardName}
+          onUpdateTotal={fetchData} 
+        />
+
+        <UpgradeModal 
+          isOpen={showUpgradeModal} 
+          onClose={() => setShowUpgradeModal(false)}
+        />
+
       </div>
     </div>
   )
