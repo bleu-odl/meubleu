@@ -15,17 +15,19 @@ export default function DashboardPage() {
   const [percentageChange, setPercentageChange] = useState(0)
   const [highestExpense, setHighestExpense] = useState<{name: string, value: number} | null>(null)
   const [nextDue, setNextDue] = useState<{name: string, date: string, value: number} | null>(null)
+  
+  // --- DADO NOVO: RECEITA TOTAL ---
   const [totalIncome, setTotalIncome] = useState(0) 
 
   // Dados Gráficos
   const [chartData, setChartData] = useState<any[]>([]) 
   const [topCategories, setTopCategories] = useState<any[]>([])
-  
-  // --- NOVOS ESTADOS PARA O GRÁFICO 3 ---
-  const [rawYearExpenses, setRawYearExpenses] = useState<any[]>([]) // Dados brutos do ano
-  const [accountNames, setAccountNames] = useState<string[]>([])    // Lista para o dropdown
-  const [selectedAccount, setSelectedAccount] = useState('')        // Conta selecionada
-  const [specificChartData, setSpecificChartData] = useState<any[]>([]) // Dados do gráfico 3
+
+  // Dados Gráfico 3 (Específico)
+  const [rawYearExpenses, setRawYearExpenses] = useState<any[]>([]) 
+  const [accountNames, setAccountNames] = useState<string[]>([])    
+  const [selectedAccount, setSelectedAccount] = useState('')        
+  const [specificChartData, setSpecificChartData] = useState<any[]>([])
   
   const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
   const shortMonthNames = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
@@ -38,7 +40,7 @@ export default function DashboardPage() {
     fetchDashboardData()
   }, [])
 
-  // Efeito Especial: Atualiza o Gráfico 3 quando muda a seleção do dropdown
+  // Efeito para atualizar o Gráfico 3 localmente
   useEffect(() => {
     if (selectedAccount && rawYearExpenses.length > 0) {
       processSpecificChart(selectedAccount, rawYearExpenses)
@@ -68,25 +70,27 @@ export default function DashboardPage() {
     const date12MonthsAgo = new Date(currentYear, currentMonth - 11, 1)
     const startChartDate = date12MonthsAgo.toISOString()
 
-    // QUERIES
+    // --- QUERIES (DESPESAS) ---
     const { data: currentExpenses } = await supabase.from('expenses').select('value, date, name').eq('user_id', user.id).gte('date', startCurrent).lte('date', endCurrent)
     const { data: lastExpenses } = await supabase.from('expenses').select('value').eq('user_id', user.id).gte('date', startLast).lte('date', endLast)
     
     const todayStr = now.toISOString().split('T')[0]
     const { data: nextExpenseData } = await supabase.from('expenses').select('name, date, value').eq('user_id', user.id).eq('status', 'pendente').gte('date', todayStr).order('date', { ascending: true }).limit(1).single()
 
-    // Busca dados anuais para os gráficos
-    const { data: yearExpenses } = await supabase
-      .from('expenses')
-      .select('value, date, name')
-      .eq('user_id', user.id)
-      .gte('date', startChartDate)
-      .order('date', { ascending: true })
+    const { data: yearExpenses } = await supabase.from('expenses').select('value, date, name').eq('user_id', user.id).gte('date', startChartDate).order('date', { ascending: true })
 
-    // --- CÁLCULOS CARDS ---
+    // --- QUERY (RECEITAS) - ADICIONADO ---
+    const { data: currentIncomes } = await supabase.from('incomes').select('amount').eq('user_id', user.id).gte('date', startCurrent).lte('date', endCurrent)
+
+    // --- CÁLCULOS ---
     const sumCurrent = currentExpenses?.reduce((acc, curr) => acc + curr.value, 0) || 0
     const sumLast = lastExpenses?.reduce((acc, curr) => acc + curr.value, 0) || 0
+    
+    // Soma das Receitas
+    const sumIncome = currentIncomes?.reduce((acc, curr) => acc + curr.amount, 0) || 0
+    
     setCurrentMonthTotal(sumCurrent)
+    setTotalIncome(sumIncome) // Guarda no estado
 
     if (sumLast === 0) setPercentageChange(sumCurrent > 0 ? 100 : 0)
     else setPercentageChange(((sumCurrent - sumLast) / sumLast) * 100)
@@ -100,20 +104,16 @@ export default function DashboardPage() {
 
     setNextDue(nextExpenseData || null)
 
-    // --- PREPARA DADOS GERAIS ---
-    
-    // 1. Salva dados brutos para uso local
+    // PREPARAÇÃO DE DADOS PARA GRÁFICOS
     setRawYearExpenses(yearExpenses || [])
 
-    // 2. Extrai nomes únicos para o dropdown
     if (yearExpenses) {
         const uniqueNames = Array.from(new Set(yearExpenses.map(item => item.name))).sort()
         setAccountNames(uniqueNames)
-        // Seleciona o primeiro automaticamente se houver
         if (uniqueNames.length > 0) setSelectedAccount(uniqueNames[0])
     }
 
-    // 3. Gráfico 1 (Total)
+    // Gráfico 1 (Total)
     const monthlyDataMap = new Map()
     for (let i = 0; i < 12; i++) {
         const d = new Date(currentYear, currentMonth - 11 + i, 1)
@@ -132,7 +132,7 @@ export default function DashboardPage() {
     })
     setChartData(Array.from(monthlyDataMap.values()))
 
-    // 4. Gráfico 2 (Top Categories)
+    // Gráfico 2 (Top Categorias)
     const categoryMap = new Map()
     currentExpenses?.forEach(exp => {
         const currentVal = categoryMap.get(exp.name) || 0
@@ -152,14 +152,13 @@ export default function DashboardPage() {
     setLoading(false)
   }
 
-  // Lógica separada para o Gráfico 3 (Roda localmente sem ir no banco)
+  // Processa Gráfico 3
   function processSpecificChart(accountName: string, allExpenses: any[]) {
     const now = new Date()
     const currentMonth = now.getMonth()
     const currentYear = now.getFullYear()
 
     const specificMap = new Map()
-    // Inicializa meses zerados
     for (let i = 0; i < 12; i++) {
         const d = new Date(currentYear, currentMonth - 11 + i, 1)
         const key = `${d.getFullYear()}-${d.getMonth()}`
@@ -167,7 +166,6 @@ export default function DashboardPage() {
         specificMap.set(key, { name: label, value: 0 })
     }
 
-    // Filtra e soma apenas a conta selecionada
     allExpenses.filter(e => e.name === accountName).forEach(exp => {
         const d = new Date(exp.date)
         const key = `${d.getFullYear()}-${d.getMonth()}`
@@ -181,12 +179,14 @@ export default function DashboardPage() {
     setSpecificChartData(Array.from(specificMap.values()))
   }
 
-  // Tokens
+  // --- DESIGN TOKENS ---
   const isSpendingMore = percentageChange > 0
   const isSpendingLess = percentageChange < 0
   const colors = { red: '#DC2626', green: '#16A34A', blue: '#3B82F6', indigo: '#6366F1' }
   const cardShadow = "shadow-[0_10px_20px_rgba(0,0,0,0.04)]"
   const iconBaseClass = "flex items-center justify-center w-[42px] h-[42px] rounded-xl shrink-0"
+  
+  // CÁLCULO DO SALDO REAL
   const currentBalance = totalIncome - currentMonthTotal
 
   if (loading) return <div className="p-8 text-center text-gray-500">Carregando dashboard...</div>
@@ -204,6 +204,8 @@ export default function DashboardPage() {
 
         {/* CARDS */}
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          
+          {/* Card 1: Gastos */}
           <div className={`rounded-2xl bg-white p-7 border border-gray-100 flex flex-col justify-between h-44 ${cardShadow}`}>
             <div className="flex justify-between items-center">
               <div><p className="text-sm font-medium text-gray-500 mb-1">Gastos do mês</p><h3 className="text-3xl font-bold text-gray-900 tracking-tight">R$ {currentMonthTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3></div>
@@ -217,113 +219,65 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Card 2: Saldo (COM LÓGICA DE RECEITA) */}
           <div className={`rounded-2xl bg-white p-7 border border-gray-100 flex flex-col justify-between h-44 ${cardShadow}`}>
             <div className="flex justify-between items-center">
-              <div><p className="text-sm font-medium text-gray-500 mb-1">Saldo do mês</p>{totalIncome === 0 ? (<div className="mt-1"><button onClick={() => alert("Em breve!")} className="text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition-colors"><PlusCircle size={14}/> Informar renda</button></div>) : (<h3 className="text-3xl font-bold tracking-tight mt-1" style={{ color: currentBalance < 0 ? colors.red : colors.green }}>R$ {currentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>)}</div>
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-1">Saldo do mês</p>
+                {/* Se Receita = 0, mostra botão. Se > 0, mostra saldo */}
+                {totalIncome === 0 ? (
+                  <div className="mt-1"><button onClick={() => router.push('/incomes')} className="text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition-colors"><PlusCircle size={14}/> Informar renda</button></div>
+                ) : (
+                  <h3 className="text-3xl font-bold tracking-tight mt-1" style={{ color: currentBalance < 0 ? colors.red : colors.green }}>
+                    R$ {currentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                )}
+              </div>
               <div className={`${iconBaseClass} bg-gray-50 text-gray-500`}><Wallet size={20} /></div>
             </div>
-            <p className="text-xs text-gray-400 mt-auto">{totalIncome === 0 ? "Cadastre sua renda para ver o saldo real" : "Resultado do mês"}</p>
+            <p className="text-xs text-gray-400 mt-auto">
+                {totalIncome === 0 
+                    ? "Cadastre sua renda para ver o saldo real" 
+                    : `Receita: R$ ${totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            </p>
           </div>
 
+          {/* Card 3: Maior Despesa */}
           <div className={`rounded-2xl bg-white p-7 border border-gray-100 flex flex-col justify-between h-44 ${cardShadow}`}>
             <div className="flex justify-between items-start"><div className="w-full"><p className="text-sm font-medium text-gray-500 mb-1">Maior despesa</p>{highestExpense ? (<div className="mt-3"><h3 className="text-lg font-bold text-gray-900 leading-tight line-clamp-2" title={highestExpense.name}>{highestExpense.name}</h3><p className="text-lg font-semibold mt-1" style={{ color: colors.red }}>R$ {highestExpense.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></div>) : (<h3 className="text-lg font-medium text-gray-400 mt-3">--</h3>)}</div><div className={`${iconBaseClass} bg-orange-50 text-orange-600`}><AlertCircle size={20} /></div></div><p className="text-xs text-gray-400 mt-auto">Neste mês</p>
           </div>
 
+          {/* Card 4: Próximo Vencimento */}
           <div className={`rounded-2xl bg-white p-7 border border-gray-100 flex flex-col justify-between h-44 ${cardShadow}`}>
             <div className="flex justify-between items-start"><div className="w-full"><p className="text-sm font-medium text-gray-500 mb-1">Próximo vencimento</p>{nextDue ? (<div className="mt-3"><h3 className="text-lg font-bold text-gray-900 leading-tight line-clamp-2" title={nextDue.name}>{nextDue.name}</h3><p className="text-sm font-medium text-blue-600 mt-1">{new Date(nextDue.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p><p className="text-sm text-gray-600">R$ {nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></div>) : (<h3 className="text-sm font-medium text-green-600 mt-4 flex items-center gap-1.5">Nenhum vencimento pendente <span className="text-base">🎉</span></h3>)}</div><div className={`${iconBaseClass} bg-indigo-50 text-indigo-600`}><CalendarClock size={20} /></div></div>
           </div>
         </div>
 
-        {/* GRÁFICO 1: EVOLUÇÃO GERAL */}
+        {/* GRÁFICO 1: EVOLUÇÃO ANUAL */}
         <div className={`rounded-2xl bg-white p-8 border border-gray-100 ${cardShadow}`}>
-            <div className="mb-8 text-center">
-                <h3 className="text-xl font-bold text-gray-800">Total de Despesas por Mês (R$)</h3>
-                <p className="text-sm text-gray-400">Evolução dos últimos 12 meses</p>
-            </div>
-            <div className="h-[300px] w-full">
-                {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(value) => `${value/1000}k`} />
-                    <Tooltip cursor={{ stroke: '#3B82F6', strokeWidth: 1, strokeDasharray: '5 5' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 'Total']} />
-                    <Line type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={3} dot={{ r: 4, fill: "#3B82F6", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, fill: "#2563EB" }} />
-                    </LineChart>
-                </ResponsiveContainer>
-                ) : ( <div className="flex h-full items-center justify-center text-gray-400">Sem dados.</div> )}
-            </div>
+            <div className="mb-8 text-center"><h3 className="text-xl font-bold text-gray-800">Total de Despesas por Mês (R$)</h3><p className="text-sm text-gray-400">Evolução dos últimos 12 meses</p></div>
+            <div className="h-[350px] w-full">{chartData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} dy={10} /><YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(value) => `${value/1000}k`} /><Tooltip cursor={{ stroke: '#3B82F6', strokeWidth: 1, strokeDasharray: '5 5' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 'Total']} /><Line type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={3} dot={{ r: 4, fill: "#3B82F6", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, fill: "#2563EB" }} /></LineChart></ResponsiveContainer>) : ( <div className="flex h-full items-center justify-center text-gray-400">Sem dados.</div> )}</div>
         </div>
 
-        {/* --- GRID INFERIOR (50/50) --- */}
+        {/* GRID INFERIOR (50/50) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             {/* GRÁFICO 2: TOP GASTOS */}
             <div className={`rounded-2xl bg-white p-8 border border-gray-100 ${cardShadow}`}>
-                <div className="mb-6">
-                    <h3 className="text-lg font-bold text-gray-900">Para onde vai o dinheiro?</h3>
-                    <p className="text-sm text-gray-400">Maiores categorias deste mês</p>
-                </div>
-                <div className="space-y-5">
-                    {topCategories.length > 0 ? (
-                        topCategories.map((cat, index) => (
-                            <div key={index} className="group">
-                                <div className="flex justify-between items-center mb-1.5 text-sm">
-                                    <span className="font-medium text-gray-700 truncate max-w-[150px]" title={cat.name}>{cat.name}</span>
-                                    <div className="text-right">
-                                        <span className="font-bold text-gray-900 mr-2">R$ {cat.value.toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
-                                        <span className="text-xs text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">{cat.percent.toFixed(0)}%</span>
-                                    </div>
-                                </div>
-                                <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden">
-                                    <div className="h-full rounded-full transition-all duration-500 ease-out" style={{ width: `${cat.percent}%`, backgroundColor: index === 0 ? '#3B82F6' : index === 1 ? '#6366F1' : '#A855F7' }} />
-                                </div>
-                            </div>
-                        ))
-                    ) : ( <div className="flex h-[200px] items-center justify-center text-gray-400">Nenhum gasto neste mês.</div> )}
-                </div>
+                <div className="mb-6"><h3 className="text-lg font-bold text-gray-900">Para onde vai o dinheiro?</h3><p className="text-sm text-gray-400">Maiores categorias deste mês</p></div>
+                <div className="space-y-5">{topCategories.length > 0 ? (topCategories.map((cat, index) => (<div key={index} className="group"><div className="flex justify-between items-center mb-1.5 text-sm"><span className="font-medium text-gray-700 truncate max-w-[150px]" title={cat.name}>{cat.name}</span><div className="text-right"><span className="font-bold text-gray-900 mr-2">R$ {cat.value.toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span><span className="text-xs text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">{cat.percent.toFixed(0)}%</span></div></div><div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden"><div className="h-full rounded-full transition-all duration-500 ease-out" style={{ width: `${cat.percent}%`, backgroundColor: index === 0 ? '#3B82F6' : index === 1 ? '#6366F1' : '#A855F7' }} /></div></div>))) : ( <div className="flex h-[200px] items-center justify-center text-gray-400">Nenhum gasto neste mês.</div> )}</div>
             </div>
 
-            {/* GRÁFICO 3: EVOLUÇÃO POR CATEGORIA (NOVO) */}
+            {/* GRÁFICO 3: EVOLUÇÃO POR CATEGORIA */}
             <div className={`rounded-2xl bg-white p-8 border border-gray-100 ${cardShadow}`}>
                 <div className="mb-6 flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-900">Evolução por Categoria</h3>
-                        <p className="text-sm text-gray-400">Histórico de 12 meses</p>
-                    </div>
-                    {/* DROPDOWN DE SELEÇÃO */}
-                    <select 
-                        value={selectedAccount}
-                        onChange={(e) => setSelectedAccount(e.target.value)}
-                        className="text-sm border-gray-200 rounded-lg py-1.5 px-3 bg-gray-50 text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer hover:bg-gray-100 transition-colors"
-                    >
+                    <div><h3 className="text-lg font-bold text-gray-900">Evolução por Categoria</h3><p className="text-sm text-gray-400">Histórico de 12 meses</p></div>
+                    <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)} className="text-sm border-gray-200 rounded-lg py-1.5 px-3 bg-gray-50 text-gray-700 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer hover:bg-gray-100 transition-colors">
                         {accountNames.length === 0 && <option>Nenhuma conta</option>}
-                        {accountNames.map(name => (
-                            <option key={name} value={name}>{name}</option>
-                        ))}
+                        {accountNames.map(name => (<option key={name} value={name}>{name}</option>))}
                     </select>
                 </div>
-
-                <div className="h-[250px] w-full">
-                    {specificChartData.length > 0 && selectedAccount ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={specificChartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(value) => `${value}`} />
-                        <Tooltip 
-                            cursor={{ stroke: '#6366F1', strokeWidth: 1, strokeDasharray: '5 5' }}
-                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                            formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, selectedAccount]}
-                        />
-                        {/* Linha Roxa/Indigo para diferenciar do gráfico principal */}
-                        <Line type="monotone" dataKey="value" stroke={colors.indigo} strokeWidth={3} dot={{ r: 4, fill: colors.indigo, strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, fill: "#4F46E5" }} />
-                        </LineChart>
-                    </ResponsiveContainer>
-                    ) : (
-                    <div className="flex h-full items-center justify-center text-gray-400">Selecione uma categoria.</div>
-                    )}
-                </div>
+                <div className="h-[250px] w-full">{specificChartData.length > 0 && selectedAccount ? (<ResponsiveContainer width="100%" height="100%"><LineChart data={specificChartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} dy={10} /><YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(value) => `${value}`} /><Tooltip cursor={{ stroke: '#6366F1', strokeWidth: 1, strokeDasharray: '5 5' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, selectedAccount]} /><Line type="monotone" dataKey="value" stroke={colors.indigo} strokeWidth={3} dot={{ r: 4, fill: colors.indigo, strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, fill: "#4F46E5" }} /></LineChart></ResponsiveContainer>) : ( <div className="flex h-full items-center justify-center text-gray-400">Selecione uma categoria.</div> )}</div>
             </div>
 
         </div>

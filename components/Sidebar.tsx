@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, List, User, LogOut, Wallet, Tags, ChevronRight } from 'lucide-react'
+// Adicionei TrendingUp aqui na lista de importações 👇
+import { LayoutDashboard, List, User, LogOut, Wallet, Tags, ChevronRight, TrendingUp } from 'lucide-react'
 import { createClient } from '../lib/supabase'
 import { useState } from 'react'
 
@@ -19,6 +20,7 @@ export function Sidebar() {
 
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'Receitas', path: '/incomes', icon: TrendingUp }, // Agora vai funcionar!
     { name: 'Lançamentos', path: '/expenses', icon: List },
     { name: 'Minhas Despesas', path: '/accounts', icon: Tags },
     { name: 'Perfil', path: '/profile', icon: User },
@@ -43,7 +45,6 @@ export function Sidebar() {
               <Wallet size={24} />
             </div>
             
-            {/* Texto do Logo com Animação */}
             <span className={`transition-all duration-300 origin-left ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-10 w-0'}`}>
               Finance SaaS
             </span>
@@ -70,7 +71,6 @@ export function Sidebar() {
                 {item.name}
               </span>
 
-              {/* Tooltip para quando estiver fechado (opcional, melhora UX) */}
               {!isHovered && (
                 <div className="absolute left-16 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                   {item.name}
