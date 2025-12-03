@@ -2,97 +2,142 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-// Adicionei TrendingUp aqui na lista de importações 👇
-import { LayoutDashboard, List, User, LogOut, Wallet, Tags, ChevronRight, TrendingUp } from 'lucide-react'
+import { LayoutDashboard, List, User, Wallet, Tags, TrendingUp } from 'lucide-react'
 import { createClient } from '../lib/supabase'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
-  const [isHovered, setIsHovered] = useState(false)
+  
+  const [userInitial, setUserInitial] = useState('U')
+  const [userName, setUserName] = useState('Usuário')
 
-  // LISTA NEGRA: Páginas onde a Sidebar NÃO deve aparecer
+  // Busca dados do usuário para o rodapé
+  useEffect(() => {
+    async function getUserData() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        // Tenta pegar do metadata ou do email
+        const name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário'
+        setUserName(name)
+        setUserInitial(name.charAt(0).toUpperCase())
+      }
+    }
+    getUserData()
+  }, [])
+
+  // LISTA NEGRA
   if (pathname === '/login' || pathname === '/') {
     return null
   }
-
-  const menuItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Receitas', path: '/incomes', icon: TrendingUp }, // Agora vai funcionar!
-    { name: 'Lançamentos', path: '/expenses', icon: List },
-    { name: 'Minhas Despesas', path: '/accounts', icon: Tags },
-    { name: 'Perfil', path: '/profile', icon: User },
-  ]
 
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/login')
   }
 
+  // DEFINIÇÃO DAS SEÇÕES DO MENU
+  const navSections = [
+    {
+      title: 'Principal',
+      items: [
+        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }
+      ]
+    },
+    {
+      title: 'Movimento',
+      items: [
+        { name: 'Receitas', path: '/incomes', icon: TrendingUp },
+        { name: 'Lançamentos', path: '/expenses', icon: List },
+        { name: 'Minhas Despesas', path: '/accounts', icon: Tags }
+      ]
+    },
+    {
+      title: 'Conta',
+      items: [
+        { name: 'Perfil', path: '/profile', icon: User }
+      ]
+    }
+  ]
+
   return (
-    <aside 
-      className={`peer fixed left-0 top-0 h-screen bg-white border-r border-gray-200 shadow-sm flex flex-col transition-all duration-300 ease-in-out z-50 ${isHovered ? 'w-64' : 'w-20'}`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <aside className="fixed left-0 top-0 h-screen w-[240px] bg-[#F9FAFB] border-r border-slate-200/60 flex flex-col z-50">
       
-      {/* LOGO */}
-      <div className={`flex h-20 items-center px-6 transition-all duration-300 ${isHovered ? 'justify-start' : 'justify-center'}`}>
-        <div className="flex items-center gap-3 font-bold text-xl text-blue-600 overflow-hidden whitespace-nowrap">
-            <div className="shrink-0 p-2 bg-blue-50 rounded-xl">
-              <Wallet size={24} />
-            </div>
-            
-            <span className={`transition-all duration-300 origin-left ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-10 w-0'}`}>
-              Finance SaaS
-            </span>
+      {/* 1. LOGO / TOPO */}
+      <div className="h-20 flex items-center px-6">
+        <div className="flex items-center gap-2.5 text-[#0F172A] font-semibold">
+          <div className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg shadow-sm shadow-blue-200">
+            <Wallet size={16} strokeWidth={2.5} />
+          </div>
+          <span className="text-[15px] tracking-tight">Finance SaaS</span>
         </div>
       </div>
 
-      {/* LINKS DE NAVEGAÇÃO */}
-      <nav className="flex-1 space-y-2 p-4 mt-4">
-        {menuItems.map((item) => {
-          const isActive = pathname === item.path
-          return (
-            <Link
-              key={item.path}
-              href={item.path}
-              className={`group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200 overflow-hidden whitespace-nowrap relative ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-blue-600'
-              } ${isHovered ? 'justify-start' : 'justify-center'}`}
-            >
-              <item.icon size={22} className="shrink-0 transition-transform duration-300 group-hover:scale-110" />
-              
-              <span className={`transition-all duration-300 origin-left ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-10 w-0 absolute'}`}>
-                {item.name}
-              </span>
-
-              {!isHovered && (
-                <div className="absolute left-16 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                  {item.name}
-                </div>
-              )}
-            </Link>
-          )
-        })}
+      {/* 2. NAVEGAÇÃO POR SEÇÕES */}
+      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+        {navSections.map((section, idx) => (
+          <div key={idx}>
+            {/* Label da Seção */}
+            <h3 className="px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              {section.title}
+            </h3>
+            
+            {/* Lista de Itens */}
+            <ul className="space-y-0.5">
+              {section.items.map((item) => {
+                const isActive = pathname === item.path
+                return (
+                  <li key={item.path}>
+                    <Link
+                      href={item.path}
+                      className={`
+                        group flex items-center gap-3 px-3 py-2 rounded-full text-[14px] font-medium transition-all duration-200
+                        ${isActive 
+                          ? 'bg-blue-50 text-blue-700' // Estado Ativo Suave
+                          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900' // Estado Normal
+                        }
+                      `}
+                    >
+                      <item.icon 
+                        size={18} 
+                        strokeWidth={2}
+                        className={isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'} 
+                      />
+                      {item.name}
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
-      {/* RODAPÉ (LOGOUT) */}
-      <div className="p-4 border-t border-gray-100">
-        <button
-          onClick={handleLogout}
-          className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-red-500 hover:bg-red-50 transition-all duration-200 overflow-hidden whitespace-nowrap w-full ${isHovered ? 'justify-start' : 'justify-center'}`}
-        >
-          <LogOut size={22} className="shrink-0" />
-          <span className={`transition-all duration-300 origin-left ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-10 w-0'}`}>
-            Sair
-          </span>
-        </button>
+      {/* 3. RODAPÉ (USUÁRIO) */}
+      <div className="p-4">
+        <div className="flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          {/* Avatar */}
+          <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
+            {userInitial}
+          </div>
+          
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-medium text-slate-900 truncate">
+              {userName}
+            </p>
+            <button 
+              onClick={handleLogout}
+              className="text-[11px] text-red-500 hover:text-red-700 font-medium transition-colors"
+            >
+              Sair da conta
+            </button>
+          </div>
+        </div>
       </div>
+
     </aside>
   )
 }

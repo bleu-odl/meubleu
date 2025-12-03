@@ -3,32 +3,55 @@
 import { createClient } from '../../lib/supabase'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { User, LogOut, Shield, Mail, Lock, Trash2, Save, X, Edit2 } from 'lucide-react'
+import { 
+  User, LogOut, Shield, Mail, Lock, Trash2, Save, 
+  Phone, Calendar, DollarSign, Eye, EyeOff, Camera, CheckCircle2, AlertTriangle 
+} from 'lucide-react'
 import Link from 'next/link'
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [isEditing, setIsEditing] = useState(false)
   
-  const [formData, setFormData] = useState({ username: '', email: '' })
-  const [selectedAvatar, setSelectedAvatar] = useState('')
+  // Formulário de Dados Pessoais
+  const [formData, setFormData] = useState({ 
+    username: '', 
+    email: '', 
+    full_name: '', 
+    phone: '' 
+  })
   
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
+  // Preferências Financeiras
+  const [financialPrefs, setFinancialPrefs] = useState({
+    currency: 'BRL',
+    start_day: 1
+  })
+
+  // Segurança
+  const [passwords, setPasswords] = useState({ new: '', confirm: '' })
+  const [showPassword, setShowPassword] = useState(false)
+  const [passwordStrength, setPasswordStrength] = useState(0) // 0 a 4
   const [loadingPass, setLoadingPass] = useState(false)
+  const [loadingSave, setLoadingSave] = useState(false)
 
   const supabase = createClient()
   const router = useRouter()
 
-  const avatars = [
-    { id: 'male', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=b6e3f4', label: 'Masculino' },
-    { id: 'female', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka&backgroundColor=ffdfbf', label: 'Feminino' }
-  ]
-
   useEffect(() => {
     fetchProfile()
   }, [])
+
+  // Cálculo de Força da Senha
+  useEffect(() => {
+    const pass = passwords.new
+    let score = 0
+    if (!pass) { setPasswordStrength(0); return }
+    if (pass.length >= 6) score += 1
+    if (pass.length >= 10) score += 1
+    if (/[A-Z]/.test(pass)) score += 1
+    if (/[0-9]/.test(pass)) score += 1
+    setPasswordStrength(score)
+  }, [passwords.new])
 
   async function fetchProfile() {
     setLoading(true)
@@ -39,40 +62,35 @@ export default function ProfilePage() {
       return
     }
 
-    const { data } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', user.id)
-      .single()
+    const { data } = await supabase.from('users').select('*').eq('id', user.id).single()
 
     if (data) {
       setProfile(data)
-      setFormData({ username: data.username, email: data.email })
-      setSelectedAvatar(data.avatar_url || 'male')
-    } else {
-      // Fallback para evitar tela branca se não tiver perfil público
-      const fallbackProfile = { 
-        id: user.id,
-        email: user.email, 
-        username: user.email?.split('@')[0], 
-        plano: 'free',
-        avatar_url: 'male'
-      }
-      setProfile(fallbackProfile)
-      setFormData({ username: fallbackProfile.username || '', email: fallbackProfile.email || '' })
-      setSelectedAvatar('male')
+      setFormData({ 
+        username: data.username || '', 
+        email: data.email || '',
+        full_name: data.full_name || '',
+        phone: data.phone || ''
+      })
+      setFinancialPrefs({
+        currency: data.currency || 'BRL',
+        start_day: data.financial_start_day || 1
+      })
     }
     setLoading(false)
   }
 
-  async function handleUpdateProfile() {
+  // --- SALVAR DADOS (Geral) ---
+  async function handleSaveAll() {
     if(!profile) return
-    if(formData.username.length < 3) return alert("Username muito curto!")
+    setLoadingSave(true)
 
     const updates = {
+      full_name: formData.full_name,
       username: formData.username,
-      email: formData.email,
-      avatar_url: selectedAvatar,
+      phone: formData.phone,
+      currency: financialPrefs.currency,
+      financial_start_day: financialPrefs.start_day,
       updated_at: new Date().toISOString(),
     }
 
@@ -81,46 +99,40 @@ export default function ProfilePage() {
     if (error) {
       alert("Erro ao atualizar: " + error.message)
     } else {
-      if(formData.email !== profile.email) {
-        const { error: authError } = await supabase.auth.updateUser({ email: formData.email })
-        if(authError) alert("Atenção: " + authError.message)
-        else alert("E-mail atualizado! Verifique sua caixa de entrada.")
-      }
-      
       setProfile({ ...profile, ...updates })
-      setIsEditing(false)
-      alert("Perfil atualizado com sucesso!")
+      alert("Alterações salvas com sucesso!")
     }
+    setLoadingSave(false)
   }
 
+  // --- ALTERAR SENHA ---
   async function handleChangePassword() {
-    if (!newPassword) return alert("Digite a nova senha.")
-    if (newPassword !== confirmPassword) return alert("As senhas não conferem.")
+    if (!passwords.new) return alert("Digite a nova senha.")
+    if (passwords.new !== passwords.confirm) return alert("As senhas não conferem.")
     
     setLoadingPass(true)
-    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    const { error } = await supabase.auth.updateUser({ password: passwords.new })
 
     if (error) {
       alert("Erro: " + error.message)
     } else {
-      alert("Senha alterada com sucesso!")
-      setNewPassword('')
-      setConfirmPassword('')
+      alert("Senha atualizada com segurança!")
+      setPasswords({ new: '', confirm: '' })
     }
     setLoadingPass(false)
   }
 
+  // --- ENCERRAR CONTA ---
   async function handleDeleteAccount() {
-    const confirmText = prompt("Para deletar sua conta permanentemente, digite 'DELETAR':")
-    if (confirmText !== 'DELETAR') return
+    const confirmText = prompt("Para confirmar o encerramento, digite 'ENCERRAR':")
+    if (confirmText !== 'ENCERRAR') return
 
-    const { error } = await supabase.from('users').delete().eq('id', profile?.id)
+    const { error } = await supabase.from('users').delete().eq('id', profile.id)
 
     if (error) {
-      alert("Erro ao apagar dados: " + error.message)
+      alert("Erro ao encerrar conta: " + error.message)
     } else {
       await supabase.auth.signOut()
-      alert("Sua conta e dados foram apagados.")
       router.push('/login')
     }
   }
@@ -130,171 +142,195 @@ export default function ProfilePage() {
     router.push('/login')
   }
 
-  if (loading) return <div className="p-8 text-center text-gray-500">Carregando perfil...</div>
+  // Helper: Iniciais
+  const getInitials = () => {
+    const name = formData.full_name || formData.username || 'U'
+    return name.substring(0, 2).toUpperCase()
+  }
+
+  if (loading) return <div className="p-8 text-center text-gray-500">Carregando...</div>
 
   return (
     <div className="min-h-screen bg-gray-50 p-8 pb-32">
-      <div className="mx-auto max-w-2xl space-y-8">
+      <div className="mx-auto max-w-3xl space-y-6"> {/* Largura controlada e empilhamento vertical */}
         
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900">Meu Perfil</h1>
-          <button onClick={() => router.push('/dashboard')} className="text-sm text-blue-600 hover:underline">
-            ← Voltar
+        {/* 1. CABEÇALHO DE IDENTIDADE */}
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
+          <div className="relative">
+            <div className="h-24 w-24 rounded-full bg-blue-600 flex items-center justify-center text-3xl font-bold text-white shadow-lg shadow-blue-200">
+              {getInitials()}
+            </div>
+            <div className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow border border-gray-100 text-gray-500">
+               <Camera size={16} />
+            </div>
+          </div>
+          
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-900">{formData.full_name || 'Usuário'}</h1>
+            <p className="text-gray-500">Minha Conta</p>
+            <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-100">
+              <CheckCircle2 size={12} className="mr-1.5"/> Ativa
+            </div>
+          </div>
+
+          <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-2">
+            <LogOut size={16}/> Sair
           </button>
         </div>
 
-        <div className="rounded-xl bg-white p-8 shadow-sm border border-gray-100 relative">
-          
-          {!isEditing && (
-            <button 
-              onClick={() => setIsEditing(true)}
-              className="absolute top-6 right-6 p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-              title="Editar Perfil"
-            >
-              <Edit2 size={20} />
-            </button>
-          )}
-
-          <div className="flex flex-col items-center sm:flex-row gap-8">
+        {/* 2. DADOS PESSOAIS */}
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <User size={20} className="text-blue-600"/> Informações Pessoais
+                </h2>
+            </div>
             
-            <div className="flex flex-col items-center gap-3">
-              <div className="h-24 w-24 rounded-full overflow-hidden border-4 border-blue-50 shadow-sm">
-                {/* CORREÇÃO AQUI: Adicionado profile?.avatar_url */}
-                <img 
-                  src={isEditing 
-                    ? avatars.find(a => a.id === selectedAvatar)?.url 
-                    : avatars.find(a => a.id === (profile?.avatar_url || 'male'))?.url
-                  } 
-                  alt="Avatar" 
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              
-              {isEditing && (
-                <div className="flex gap-2">
-                  {avatars.map(av => (
-                    <button
-                      key={av.id}
-                      onClick={() => setSelectedAvatar(av.id)}
-                      className={`text-xs px-2 py-1 rounded border ${selectedAvatar === av.id ? 'bg-blue-100 border-blue-300 text-blue-800' : 'bg-gray-50'}`}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nome Completo</label>
+                    <input type="text" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="w-full rounded-lg border-gray-200 bg-white p-2.5 text-sm focus:ring-2 focus:ring-blue-100 outline-none border" placeholder="Seu nome"/>
+                </div>
+                <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nome de Usuário</label>
+                    <input type="text" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} className="w-full rounded-lg border-gray-200 bg-white p-2.5 text-sm focus:ring-2 focus:ring-blue-100 outline-none border"/>
+                </div>
+                <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Telefone</label>
+                    <div className="relative">
+                        <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <input type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full rounded-lg border-gray-200 bg-white p-2.5 pl-10 text-sm focus:ring-2 focus:ring-blue-100 outline-none border" placeholder="(00) 00000-0000"/>
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">E-mail</label>
+                    <div className="relative">
+                        <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <input type="email" value={formData.email} disabled className="w-full rounded-lg border-gray-200 bg-gray-50 p-2.5 pl-10 text-sm text-gray-500 cursor-not-allowed border"/>
+                    </div>
+                </div>
+            </div>
+
+            <div className="mt-8 flex justify-end">
+                <button onClick={handleSaveAll} disabled={loadingSave} className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black transition-all shadow-lg shadow-gray-200 disabled:opacity-50">
+                    {loadingSave ? 'Salvando...' : <><Save size={18} /> Salvar alterações</>}
+                </button>
+            </div>
+        </div>
+
+        {/* 3. PREFERÊNCIAS FINANCEIRAS */}
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <DollarSign size={20} className="text-blue-600"/> Preferências Financeiras
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Moeda Principal</label>
+                    <select value={financialPrefs.currency} onChange={e => setFinancialPrefs({...financialPrefs, currency: e.target.value})} className="w-full rounded-lg border-gray-200 bg-white p-2.5 text-sm focus:ring-2 focus:ring-blue-100 outline-none border">
+                        <option value="BRL">BRL - Real Brasileiro</option>
+                        <option value="USD">USD - Dólar Americano</option>
+                        <option value="EUR">EUR - Euro</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Início do Mês Financeiro</label>
+                    <div className="relative">
+                        <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <select value={financialPrefs.start_day} onChange={e => setFinancialPrefs({...financialPrefs, start_day: parseInt(e.target.value)})} className="w-full rounded-lg border-gray-200 bg-white p-2.5 pl-10 text-sm focus:ring-2 focus:ring-blue-100 outline-none border">
+                            {[...Array(31)].map((_, i) => (
+                                <option key={i+1} value={i+1}>Dia {i+1}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div className="mt-6 flex justify-end">
+                 <button onClick={handleSaveAll} className="text-sm text-blue-600 font-medium hover:underline">Salvar preferências</button>
+            </div>
+        </div>
+
+        {/* 4. SEGURANÇA (SENHA) */}
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <Shield size={20} className="text-blue-600"/> Segurança
+            </h2>
+            
+            <div className="space-y-5 max-w-md">
+                <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nova Senha</label>
+                    <div className="relative">
+                        <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <input 
+                            type={showPassword ? "text" : "password"} 
+                            value={passwords.new}
+                            onChange={e => setPasswords({...passwords, new: e.target.value})}
+                            className="w-full rounded-lg border-gray-200 bg-white p-2.5 pl-10 pr-10 text-sm focus:ring-2 focus:ring-blue-100 outline-none border"
+                            placeholder="••••••"
+                        />
+                        <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                        </button>
+                    </div>
+                    {/* BARRA DE FORÇA */}
+                    <div className="mt-2 h-1 w-full bg-gray-100 rounded-full overflow-hidden flex gap-1">
+                        <div className={`h-full flex-1 rounded-full transition-colors ${passwordStrength >= 1 ? 'bg-red-400' : 'bg-transparent'}`}></div>
+                        <div className={`h-full flex-1 rounded-full transition-colors ${passwordStrength >= 2 ? 'bg-yellow-400' : 'bg-transparent'}`}></div>
+                        <div className={`h-full flex-1 rounded-full transition-colors ${passwordStrength >= 3 ? 'bg-green-400' : 'bg-transparent'}`}></div>
+                        <div className={`h-full flex-1 rounded-full transition-colors ${passwordStrength >= 4 ? 'bg-emerald-600' : 'bg-transparent'}`}></div>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1 text-right font-medium">
+                        {passwordStrength >= 4 ? 'Senha forte ✅' : 'Mínimo 6 caracteres'}
+                    </p>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Confirmar Senha</label>
+                    <div className="relative">
+                        <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <input 
+                            type="password" 
+                            value={passwords.confirm}
+                            onChange={e => setPasswords({...passwords, confirm: e.target.value})}
+                            className="w-full rounded-lg border-gray-200 bg-white p-2.5 pl-10 text-sm focus:ring-2 focus:ring-blue-100 outline-none border"
+                            placeholder="••••••"
+                        />
+                    </div>
+                </div>
+                
+                <div className="pt-2 flex items-center justify-between">
+                    <Link href="/auth/forgot-password" className="text-xs text-blue-600 hover:underline font-medium">
+                        Recuperar acesso
+                    </Link>
+                    <button 
+                        onClick={handleChangePassword}
+                        disabled={loadingPass || !passwords.new}
+                        className="px-6 py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                     >
-                      {av.label}
+                        {loadingPass ? 'Salvando...' : 'Salvar nova senha'}
                     </button>
-                  ))}
                 </div>
-              )}
             </div>
-
-            <div className="flex-1 w-full space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Nome de Usuário</label>
-                {isEditing ? (
-                  <input 
-                    type="text" 
-                    value={formData.username}
-                    onChange={(e) => setFormData({...formData, username: e.target.value})}
-                    className="w-full rounded-md border-gray-300 p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
-                  />
-                ) : (
-                  // Proteção extra aqui também
-                  <p className="text-xl font-bold text-gray-900">{profile?.username}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">E-mail</label>
-                {isEditing ? (
-                  <input 
-                    type="email" 
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    className="w-full rounded-md border-gray-300 p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
-                  />
-                ) : (
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Mail size={16} />
-                    {/* Proteção extra aqui */}
-                    <span>{profile?.email}</span>
-                  </div>
-                )}
-              </div>
-
-              {isEditing && (
-                <div className="flex gap-3 pt-2">
-                  <button onClick={handleUpdateProfile} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">
-                    <Save size={16} /> Salvar
-                  </button>
-                  <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50">
-                    <X size={16} /> Cancelar
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
-        <div className="rounded-xl bg-white p-8 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <Lock size={20} className="text-gray-400"/> Segurança
-          </h3>
-          
-          <div className="space-y-4 max-w-md">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Nova Senha</label>
-              <input 
-                type="password" 
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 p-2 text-sm shadow-sm"
-                placeholder="••••••"
-              />
+        {/* 5. ZONA DE PERIGO */}
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-red-100">
+            <div className="flex items-start gap-4">
+                <div className="p-3 bg-red-50 rounded-full text-red-600">
+                    <AlertTriangle size={24} />
+                </div>
+                <div className="flex-1">
+                    <h2 className="text-lg font-bold text-gray-900 mb-1">Encerrar conta</h2>
+                    <p className="text-sm text-gray-500 mb-4">
+                        Essa ação é permanente. Todos os seus dados, despesas e histórico serão apagados e não poderão ser recuperados.
+                    </p>
+                    <button
+                        onClick={handleDeleteAccount}
+                        className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors"
+                    >
+                        Encerrar conta definitivamente
+                    </button>
+                </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Confirmar Nova Senha</label>
-              <input 
-                type="password" 
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 p-2 text-sm shadow-sm"
-                placeholder="••••••"
-              />
-            </div>
-            
-            <div className="flex items-center justify-between pt-2">
-              <button 
-                onClick={handleChangePassword}
-                disabled={loadingPass || !newPassword}
-                className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm hover:bg-black disabled:opacity-50"
-              >
-                {loadingPass ? 'Alterando...' : 'Alterar Senha'}
-              </button>
-              
-              <Link href="/auth/forgot-password" className="text-sm text-blue-600 hover:underline">
-                Esqueci minha senha atual
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-gray-200 pt-8 space-y-4">
-          <button
-            onClick={handleLogout}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-700 hover:bg-gray-50 font-medium"
-          >
-            <LogOut size={20} />
-            Sair da Conta
-          </button>
-
-          <button
-            onClick={handleDeleteAccount}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-red-600 hover:bg-red-100 font-medium"
-          >
-            <Trash2 size={20} />
-            Deletar Minha Conta
-          </button>
-          <p className="text-center text-xs text-gray-400">
-            Atenção: Ao deletar a conta, todos os seus dados e despesas serão perdidos permanentemente.
-          </p>
         </div>
 
       </div>

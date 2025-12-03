@@ -18,13 +18,12 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={inter.className}>
-        <div className="flex min-h-screen bg-gray-50">
+        <div className="flex min-h-screen bg-[#F8FAFC]"> {/* Fundo global levemente cinza */}
           
-          {/* A Sidebar agora tem a classe 'peer' interna */}
           <Sidebar />
 
-          {/* O Main reage ao hover da Sidebar */}
-          <main className="flex-1 md:ml-20 peer-hover:md:ml-64 transition-all duration-300 ease-in-out">
+          {/* MARGEM FIXA DE 240px (Tamanho da Sidebar) */}
+          <main className="flex-1 md:ml-[240px] transition-all duration-300 ease-in-out">
             {children}
           </main>
           
