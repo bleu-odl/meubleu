@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter } from "next/font/google"; // 1. Importando a fonte
 import "./globals.css";
 import { Sidebar } from "../components/Sidebar";
 
-const inter = Inter({ subsets: ["latin"] });
+// 2. Configurando a fonte
+const inter = Inter({ 
+  subsets: ["latin"],
+  weight: ['300', '400', '500', '600', '700'], // Carrega os pesos mais usados
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: "Finance SaaS",
-  description: "Controle financeiro simples",
+  description: "Gestão financeira inteligente",
 };
 
 export default function RootLayout({
@@ -17,12 +22,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={inter.className}>
-        <div className="flex min-h-screen bg-[#F8FAFC]"> {/* Fundo global levemente cinza */}
+      {/* 3. Aplicando a fonte no BODY */}
+      <body className={`${inter.className} antialiased bg-[#1E1F2B] text-slate-100`}>
+        <div className="flex min-h-screen">
           
           <Sidebar />
 
-          {/* MARGEM FIXA DE 240px (Tamanho da Sidebar) */}
           <main className="flex-1 md:ml-[240px] transition-all duration-300 ease-in-out">
             {children}
           </main>

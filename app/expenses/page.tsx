@@ -5,7 +5,6 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { MoreVertical, Edit2, Trash2, Save, X, Filter, Search, CreditCard } from 'lucide-react'
 import NewExpenseModal from '../../components/NewExpenseModal'
-// 1. IMPORTAÇÃO DOS NOVOS MODAIS
 import CreditCardModal from '../../components/CreditCardModal'
 import UpgradeModal from '../../components/UpgradeModal'
 
@@ -14,7 +13,6 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   
-  // 2. NOVOS ESTADOS PARA O CARTÃO E PLANO
   const [userPlan, setUserPlan] = useState('free')
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
   const [selectedCardName, setSelectedCardName] = useState('')
@@ -73,11 +71,7 @@ export default function ExpensesPage() {
       return
     }
 
-    // 3. BUSCAR O PLANO DO USUÁRIO
     const { data: userData } = await supabase.from('users').select('plano').eq('id', user.id).single()
-    console.log("🔍 PLANO NO BANCO:", userData) 
-    
-    if (userData) setUserPlan(userData.plano)
     if (userData) setUserPlan(userData.plano)
 
     const { data: accounts } = await supabase.from('accounts').select('name, color').eq('user_id', user.id)
@@ -117,17 +111,11 @@ export default function ExpensesPage() {
 
   const totalAmount = filteredExpenses.reduce((acc, curr) => acc + (curr.value || 0), 0)
 
-  // 4. LÓGICA DO CLIQUE NA ETIQUETA
   function handleCardClick(expense: any) {
-    // Se não for cartão, não faz nada
     if (!expense.is_credit_card) return
-
-    // Se for Free, mostra bloqueio
     if (userPlan === 'free') {
       setShowUpgradeModal(true)
-    } 
-    // Se for Premium, abre gestão
-    else {
+    } else {
       setSelectedCardId(expense.id)
       setSelectedCardName(expense.name)
     }
@@ -186,37 +174,45 @@ export default function ExpensesPage() {
   const pillBaseClass = "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap transition-colors"
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 pb-32">
+    // REMOVIDO bg-gray-50, agora o fundo é transparente para pegar o layout global
+    <div className="min-h-screen p-8 pb-32">
       <div className="mx-auto max-w-5xl">
         
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Lançamentos</h1>
-            <p className="text-gray-500">Gerencie suas despesas</p>
+            <h1 className="text-3xl font-bold text-white">Lançamentos</h1>
+            <p className="text-slate-400">Gerencie suas despesas</p>
           </div>
-          <button onClick={() => setIsModalOpen(true)} className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 shadow-md">
+          <button onClick={() => setIsModalOpen(true)} className="rounded-xl bg-indigo-600 px-5 py-2.5 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 font-medium transition-all">
             + Novo Lançamento
           </button>
         </div>
 
-        <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex flex-wrap gap-4 items-end">
+        {/* FILTROS (DARK MODE) */}
+        <div className="mb-6 bg-[#23242f] p-4 rounded-2xl shadow-lg shadow-black/20 border border-white/5 flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-[200px]">
-            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 mb-1"><Search size={12}/> Buscar</label>
+            <label className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1 mb-1"><Search size={12}/> Buscar</label>
             <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Ex: Netflix..." className="w-full rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-sm bg-white text-gray-900 focus:ring-blue-500 focus:border-blue-500"/>
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                <input 
+                  type="text" 
+                  value={searchTerm} 
+                  onChange={(e) => setSearchTerm(e.target.value)} 
+                  placeholder="Ex: Netflix..." 
+                  className="w-full rounded-lg border-white/10 bg-[#181924] py-2 pl-9 pr-3 text-sm text-white focus:ring-indigo-500 focus:border-indigo-500 placeholder:text-slate-600"
+                />
             </div>
           </div>
-          <div className="h-8 w-px bg-gray-200 hidden sm:block mx-2"></div>
+          <div className="h-8 w-px bg-white/10 hidden sm:block mx-2"></div>
           <div className="flex gap-2">
             <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">Período</label>
+                <label className="text-xs font-bold text-slate-400 uppercase">Período</label>
                 <div className="flex gap-2">
-                    <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="rounded-md border-gray-300 py-1.5 text-sm bg-white text-gray-900 focus:ring-blue-500 focus:border-blue-500">
+                    <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="rounded-lg border-white/10 py-2 px-3 text-sm bg-[#181924] text-white focus:ring-indigo-500">
                         <option value={-1}>Todo o Período</option>
                         {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
                     </select>
-                    <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="rounded-md border-gray-300 py-1.5 text-sm bg-white text-gray-900 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50" disabled={selectedMonth === -1}>
+                    <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="rounded-lg border-white/10 py-2 px-3 text-sm bg-[#181924] text-white focus:ring-indigo-500 disabled:opacity-50" disabled={selectedMonth === -1}>
                         {years.map((y) => <option key={y} value={y}>{y}</option>)}
                     </select>
                 </div>
@@ -224,16 +220,16 @@ export default function ExpensesPage() {
           </div>
           <div className="flex gap-2">
             <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">Status</label>
-                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-md border-gray-300 py-1.5 text-sm bg-white text-gray-900 w-32 focus:ring-blue-500 focus:border-blue-500">
+                <label className="text-xs font-bold text-slate-400 uppercase">Status</label>
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-lg border-white/10 py-2 px-3 text-sm bg-[#181924] text-white w-32 focus:ring-indigo-500">
                 <option value="todos">Todos</option>
                 <option value="pago">✅ Pagos</option>
                 <option value="pendente">⚠️ Pendentes</option>
                 </select>
             </div>
             <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">Tipo</label>
-                <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="rounded-md border-gray-300 py-1.5 text-sm bg-white text-gray-900 w-32 focus:ring-blue-500 focus:border-blue-500">
+                <label className="text-xs font-bold text-slate-400 uppercase">Tipo</label>
+                <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="rounded-lg border-white/10 py-2 px-3 text-sm bg-[#181924] text-white w-32 focus:ring-indigo-500">
                 <option value="todos">Todos</option>
                 <option value="variavel">Variáveis</option>
                 <option value="fixa">Fixas</option>
@@ -242,65 +238,73 @@ export default function ExpensesPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg bg-white shadow border border-gray-100 min-h-[300px]">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        {/* TABELA (DARK MODE) */}
+        <div className="overflow-hidden rounded-2xl bg-[#23242f] shadow-lg shadow-black/20 border border-white/5 min-h-[300px]">
+          <table className="min-w-full divide-y divide-white/5">
+            <thead className="bg-white/5">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Data de Vencimento</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Descrição</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Valor</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase"></th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Vencimento</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Descrição</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Valor</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider"></th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-white/5">
               {loading ? (
-                <tr><td colSpan={5} className="p-8 text-center text-gray-500">Carregando...</td></tr>
+                <tr><td colSpan={5} className="p-8 text-center text-slate-500">Carregando...</td></tr>
               ) : filteredExpenses.length === 0 ? (
-                <tr><td colSpan={5} className="p-12 text-center text-gray-500">Nenhuma despesa encontrada.</td></tr>
+                <tr><td colSpan={5} className="p-12 text-center text-slate-500">Nenhuma despesa encontrada.</td></tr>
               ) : (
                 filteredExpenses.map((expense) => {
-                  const badgeColor = accountsMap[expense.name] || '#6b7280'
+                  const badgeColor = accountsMap[expense.name] || '#64748B'
                   return (
-                    <tr key={expense.id} className="hover:bg-gray-50 transition-colors group relative">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {editingId === expense.id ? <input type="date" value={editValues.date} onChange={(e)=>setEditValues({...editValues, date: e.target.value})} className="border p-1 rounded w-full"/> : new Date(expense.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                    <tr key={expense.id} className="hover:bg-white/5 transition-colors group relative">
+                      
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-300">
+                        {editingId === expense.id ? <input type="date" value={editValues.date} onChange={(e)=>setEditValues({...editValues, date: e.target.value})} className="bg-[#181924] text-white border border-white/10 p-1 rounded w-full"/> : new Date(expense.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                       </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      
+                      <td className="px-6 py-4 text-sm font-medium text-white">
                         <div className="flex items-center gap-2">
                           <span 
-                            // 5. AQUI ESTÁ O CLICK
                             onClick={() => handleCardClick(expense)}
-                            className={`${pillBaseClass} ${expense.is_credit_card ? 'cursor-pointer hover:ring-2 ring-offset-1 ring-purple-200' : ''}`}
-                            style={{ backgroundColor: hexToRgba(badgeColor, 0.1), color: badgeColor }}
+                            className={`${pillBaseClass} ${expense.is_credit_card ? 'cursor-pointer hover:ring-1 hover:ring-white/20' : ''}`}
+                            style={{ 
+                                backgroundColor: hexToRgba(badgeColor, 0.15), 
+                                color: badgeColor 
+                            }}
                           >
                             {expense.is_credit_card && <CreditCard size={12} className="mr-1.5 opacity-80"/>}
                             {expense.name}
                           </span>
-                          {expense.type === 'fixa' && <span className={`${pillBaseClass} bg-blue-50 text-blue-600 border border-blue-100`}>Fixa</span>}
+                          {expense.type === 'fixa' && <span className={`${pillBaseClass} bg-blue-500/10 text-blue-400 border border-blue-500/20`}>Fixa</span>}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
-                        {editingId === expense.id ? <input type="number" step="0.01" value={editValues.value} onChange={(e)=>setEditValues({...editValues, value: e.target.value})} className="w-24 border p-1 rounded"/> : `R$ ${expense.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">
+                        {editingId === expense.id ? <input type="number" step="0.01" value={editValues.value} onChange={(e)=>setEditValues({...editValues, value: e.target.value})} className="bg-[#181924] text-white w-24 border border-white/10 p-1 rounded"/> : `R$ ${expense.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                       </td>
+
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <button onClick={()=>handleToggleStatus(expense.id, expense.status)} className={`${pillBaseClass} cursor-pointer hover:opacity-80 ${expense.status === 'pago' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                        <button onClick={()=>handleToggleStatus(expense.id, expense.status)} className={`${pillBaseClass} cursor-pointer hover:opacity-80 ${expense.status === 'pago' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
                           {expense.status === 'pago' ? 'Pago' : 'Pendente'}
                         </button>
                       </td>
+
                       <td className="px-6 py-4 text-right text-sm font-medium relative">
                         {editingId === expense.id ? (
                           <div className="flex justify-end gap-2">
-                            <button onClick={()=>handleSaveEdit(expense.id)} className="text-green-600"><Save size={18}/></button>
-                            <button onClick={handleCancelEdit} className="text-red-500"><X size={18}/></button>
+                            <button onClick={()=>handleSaveEdit(expense.id)} className="text-emerald-400 hover:text-emerald-300"><Save size={18}/></button>
+                            <button onClick={handleCancelEdit} className="text-red-400 hover:text-red-300"><X size={18}/></button>
                           </div>
                         ) : (
                           <>
-                            <button onClick={(e)=>{e.stopPropagation(); handleToggleMenu(expense.id)}} className="text-gray-400 hover:text-gray-600"><MoreVertical size={20}/></button>
+                            <button onClick={(e)=>{e.stopPropagation(); handleToggleMenu(expense.id)}} className="text-slate-500 hover:text-white p-1 rounded hover:bg-white/10 transition-colors"><MoreVertical size={18}/></button>
                             {openMenuId === expense.id && (
-                              <div ref={menuRef} className="absolute right-8 top-8 z-50 w-48 bg-white shadow-lg rounded-md border text-left">
-                                <button onClick={()=>handleStartEdit(expense)} className="block w-full px-4 py-2 hover:bg-gray-100 text-gray-700 text-sm flex gap-2"><Edit2 size={14}/> Editar</button>
-                                <button onClick={()=>handleDelete(expense.id)} className="block w-full px-4 py-2 hover:bg-red-50 text-red-600 text-sm flex gap-2"><Trash2 size={14}/> Deletar</button>
+                              <div ref={menuRef} className="absolute right-8 top-8 z-50 w-48 bg-[#1E1F2B] shadow-xl rounded-xl border border-white/10 text-left overflow-hidden">
+                                <button onClick={()=>handleStartEdit(expense)} className="w-full px-4 py-2.5 hover:bg-white/5 text-slate-300 text-sm flex items-center gap-2 transition-colors"><Edit2 size={14}/> Editar</button>
+                                <button onClick={()=>handleDelete(expense.id)} className="w-full px-4 py-2.5 hover:bg-red-500/10 text-red-400 text-sm flex items-center gap-2 transition-colors"><Trash2 size={14}/> Deletar</button>
                               </div>
                             )}
                           </>
@@ -314,13 +318,14 @@ export default function ExpensesPage() {
           </table>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] md:pl-64 z-40">
+        {/* RODAPÉ (DARK MODE) */}
+        <div className="fixed bottom-0 left-0 right-0 bg-[#1E1F2B] border-t border-white/5 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.2)] md:pl-64 z-40">
            <div className="mx-auto max-w-5xl flex items-center justify-between">
               <div>
-                <span className="text-sm font-semibold text-gray-500 uppercase tracking-wider block mb-1">Total do Período</span>
-                <span className="text-xs text-gray-400">Exibindo {filteredExpenses.length} contas</span>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Total do Período</span>
+                <span className="text-[10px] text-slate-600 font-medium">Exibindo {filteredExpenses.length} contas</span>
               </div>
-              <div className="text-3xl font-bold text-gray-900">
+              <div className="text-2xl font-bold text-white">
                 R$ {totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
            </div>
@@ -332,7 +337,6 @@ export default function ExpensesPage() {
           onSave={handleSaveExpense}
         />
 
-        {/* 6. MODAIS DO CARTÃO */}
         <CreditCardModal 
           isOpen={!!selectedCardId} 
           onClose={() => setSelectedCardId(null)}
