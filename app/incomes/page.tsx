@@ -174,7 +174,7 @@ export default function IncomesPage() {
         </div>
 
         {/* FILTROS DARK */}
-        <div className="mb-6 bg-[#23242f] p-4 rounded-2xl shadow-lg shadow-black/20 border border-white/5 flex flex-wrap gap-4 items-end">
+        <div className="card mb-6 p-4 flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-[200px]">
             <label className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1 mb-1"><Search size={12}/> Buscar</label>
             <div className="relative">
@@ -204,7 +204,7 @@ export default function IncomesPage() {
         </div>
 
         {/* TABELA DARK */}
-        <div className="overflow-hidden rounded-2xl bg-[#23242f] shadow-lg shadow-black/20 border border-white/5 min-h-[300px]">
+        <div className="card overflow-hidden rounded-2xl min-h-[300px]">
           <table className="min-w-full divide-y divide-white/5">
             <thead className="bg-white/5">
               <tr>

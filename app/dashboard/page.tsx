@@ -39,9 +39,20 @@ const colors = {
   indigo: '#6366F1'
 }
 
-const cardShadow = "shadow-[0_18px_45px_rgba(15,23,42,0.06)]"
-const cardClass = `relative bg-[#23242f] rounded-[18px] p-5 flex flex-col justify-between h-44 border border-white/5 transition-transform hover:-translate-y-1 duration-300 ${cardShadow}`
-const iconBadgeClass = "absolute top-5 right-5 w-9 h-9 rounded-full flex items-center justify-center bg-white/5 text-indigo-400"
+// Estilos dos Cards – padrão premium
+const cardClass = `
+  card 
+  relative 
+  p-5 
+  flex 
+  flex-col 
+  justify-between 
+  h-44
+`
+
+const iconBadgeClass =
+  "absolute top-5 right-5 w-9 h-9 rounded-full flex items-center justify-center bg-white/5 text-indigo-400"
+
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -51,6 +62,7 @@ export default function DashboardPage() {
   // Estados
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+
   const [currentMonthTotal, setCurrentMonthTotal] = useState(0)
   const [percentageChange, setPercentageChange] = useState(0)
   const [highestExpense, setHighestExpense] = useState<{name: string, value: number} | null>(null)
@@ -85,6 +97,7 @@ export default function DashboardPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
+    // Pega nome formatado
     const rawName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário'
     const formattedName = rawName.charAt(0).toUpperCase() + rawName.slice(1)
     setUserName(formattedName)
@@ -101,6 +114,7 @@ export default function DashboardPage() {
     const date12MonthsAgo = new Date(currentYear, currentMonth - 11, 1)
     const startChartDate = date12MonthsAgo.toISOString()
 
+    // Queries
     const { data: currentExpenses } = await supabase.from('expenses').select('id, value, date, name, is_credit_card').eq('user_id', user.id).gte('date', startCurrent).lte('date', endCurrent)
     const { data: lastExpenses } = await supabase.from('expenses').select('value').eq('user_id', user.id).gte('date', startLast).lte('date', endLast)
     const todayStr = new Date().toISOString().split('T')[0]
@@ -110,6 +124,7 @@ export default function DashboardPage() {
     const { data: currentIncomes } = await supabase.from('incomes').select('amount').eq('user_id', user.id).gte('date', startCurrent).lte('date', endCurrent)
     const { data: yearIncomes } = await supabase.from('incomes').select('amount, date').eq('user_id', user.id).gte('date', startChartDate)
 
+    // Cartão
     const creditExpenseIds = currentExpenses?.filter(e => e.is_credit_card).map(e => e.id) || []
     let transactions: any[] = []
     if (creditExpenseIds.length > 0) {
@@ -117,6 +132,7 @@ export default function DashboardPage() {
         transactions = transData || []
     }
 
+    // Cálculos
     const sumCurrent = currentExpenses?.reduce((acc, curr) => acc + curr.value, 0) || 0
     const sumLast = lastExpenses?.reduce((acc, curr) => acc + curr.value, 0) || 0
     const sumIncome = currentIncomes?.reduce((acc, curr) => acc + curr.amount, 0) || 0
@@ -231,7 +247,7 @@ export default function DashboardPage() {
     <div className="absolute inset-0 bg-[#1E1F2B]/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-center p-6 rounded-2xl border border-white/5">
       <div className="bg-white/10 p-3 rounded-full mb-3 shadow-lg"><Lock className="text-yellow-400" size={24} /></div>
       <h3 className="text-lg font-bold text-white">Análise Premium</h3>
-      <p className="text-sm text-slate-400 mb-4 max-w-xs">Visualize detalhes do seu cartão.</p>
+      <p className="text-sm text-slate-400 mb-4 max-w-xs">Visualize seus gastos por categoria dentro do cartão de crédito.</p>
       <button onClick={() => alert('Vai para checkout')} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full text-sm font-bold shadow-md transition-all active:scale-95">Seja Premium</button>
     </div>
   )
@@ -240,30 +256,46 @@ export default function DashboardPage() {
     <div className="min-h-screen p-8 pb-32">
       <div className="mx-auto max-w-7xl space-y-8">
         
-        {/* HEADER */}
+        {/* HEADER RESTAURADO */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-[32px] font-bold text-white tracking-tight">Visão Geral</h1>
             <p className="text-slate-400 mt-1">Bem-vindo de volta, <strong className="text-white">{userName}</strong> 👋</p>
+            
+            {/* Contexto (Badge Sutil) */}
             <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5 text-xs text-slate-400">
                <Lightbulb size={12} className="text-yellow-500"/>
                {contextMessage()}
             </div>
           </div>
 
-          {/* Filtros */}
-          <div className="flex items-center bg-[#23242f] p-1.5 rounded-xl border border-white/5 shadow-md">
+          {/* Direita: Filtros (Estilo Painel) */}
+          <div className="card flex items-center p-1.5 rounded-xl">
+
+             
              <div className="flex items-center gap-2 px-3 border-r border-white/10">
                 <CalendarClock size={16} className="text-indigo-400"/>
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Período</span>
              </div>
+
+             {/* Select Mês */}
              <div className="relative">
-                <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="bg-transparent text-white text-sm font-medium py-2 pl-3 pr-8 cursor-pointer hover:text-indigo-400 transition-colors appearance-none outline-none [&>option]:bg-[#23242f]">
+                <select 
+                    value={selectedMonth} 
+                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))} 
+                    className="bg-transparent text-white text-sm font-medium py-2 pl-3 pr-8 cursor-pointer hover:text-indigo-400 transition-colors appearance-none outline-none [&>option]:bg-[#23242f]"
+                >
                   {monthNames.map((m, i) => (<option key={i} value={i}>{m}</option>))}
                 </select>
              </div>
+
+             {/* Select Ano */}
              <div className="relative">
-                <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="bg-transparent text-white text-sm font-medium py-2 pl-3 pr-8 cursor-pointer hover:text-indigo-400 transition-colors appearance-none outline-none [&>option]:bg-[#23242f]">
+                <select 
+                    value={selectedYear} 
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))} 
+                    className="bg-transparent text-white text-sm font-medium py-2 pl-3 pr-8 cursor-pointer hover:text-indigo-400 transition-colors appearance-none outline-none [&>option]:bg-[#23242f]"
+                >
                    {years.map((y) => (<option key={y} value={y}>{y}</option>))}
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
@@ -276,7 +308,9 @@ export default function DashboardPage() {
           <div className={cardClass}>
             <div>
               <p className="text-[13px] font-medium text-slate-400 mb-1">Gastos do mês</p>
-              <h3 className="text-[30px] font-bold text-white leading-tight tracking-tight">R$ {currentMonthTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
+              <h3 className="text-[30px] font-bold text-white leading-tight tracking-tight">
+                R$ {currentMonthTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </h3>
             </div>
             <div className={iconBadgeClass}><DollarSign size={20} strokeWidth={2.5} /></div>
             <div className="mt-auto flex items-center gap-2">
@@ -287,38 +321,76 @@ export default function DashboardPage() {
                 <span className="text-[11px] text-slate-500 font-medium">vs. mês anterior</span>
             </div>
           </div>
+
           <div className={cardClass}>
             <div>
               <p className="text-[13px] font-medium text-slate-400 mb-1">Saldo do mês</p>
               {totalIncome === 0 ? (
                   <button onClick={() => router.push('/incomes')} className="mt-1 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors w-fit"><PlusCircle size={14}/> Informar renda</button>
               ) : (
-                  <h3 className={`text-[30px] font-bold leading-tight tracking-tight ${currentBalance < 0 ? 'text-red-400' : 'text-emerald-400'}`}>R$ {currentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
+                  <h3 className={`text-[30px] font-bold leading-tight tracking-tight ${currentBalance < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    R$ {currentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
               )}
             </div>
             <div className={iconBadgeClass}><Wallet size={20} strokeWidth={2.5} /></div>
             <p className="text-[13px] text-slate-500 mt-auto">{currentBalance < 0 ? "No vermelho" : "No azul"}</p>
           </div>
+
           <div className={cardClass}>
             <div className="w-full">
               <p className="text-[13px] font-medium text-slate-400 mb-1">Maior despesa</p>
-              {highestExpense ? (<><h3 className="text-lg font-bold text-white leading-snug mt-1 truncate" title={highestExpense.name}>{highestExpense.name}</h3><p className="text-[22px] font-bold text-red-400 mt-0.5">R$ {highestExpense.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></>) : (<h3 className="text-lg font-medium text-slate-600 mt-2">--</h3>)}
+              {highestExpense ? (
+                <>
+                    <h3 className="text-lg font-bold text-white leading-snug mt-1 truncate" title={highestExpense.name}>
+                    {highestExpense.name}
+                    </h3>
+                    <p className="text-[22px] font-bold text-red-400 mt-0.5">
+                    R$ {highestExpense.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                </>
+              ) : (
+                <h3 className="text-lg font-medium text-slate-600 mt-2">--</h3>
+              )}
             </div>
             <div className={iconBadgeClass}><AlertTriangle size={20} strokeWidth={2.5} /></div>
             <p className="text-[11px] text-slate-500 mt-auto">Neste mês</p>
           </div>
+
           <div className={cardClass}>
             <div className="w-full">
               <p className="text-[13px] font-medium text-slate-400 mb-1">Próximo vencimento</p>
-              {nextDue ? (<><h3 className="text-lg font-bold text-white leading-snug mt-1 truncate" title={nextDue.name}>{nextDue.name}</h3><p className="text-[22px] font-bold text-indigo-400 mt-0.5">R$ {nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p><p className="text-[11px] font-medium text-slate-500 mt-1">Vence em {new Date(nextDue.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p></>) : (<div className="mt-2"><h3 className="text-sm font-bold text-emerald-400 flex items-center gap-1">Nenhum pendente 🎉</h3><p className="text-[11px] text-slate-500 mt-1">Tudo pago.</p></div>)}
+              {nextDue ? (
+                <>
+                  <h3 className="text-lg font-bold text-white leading-snug mt-1 truncate" title={nextDue.name}>
+                    {nextDue.name}
+                  </h3>
+                  <p className="text-[22px] font-bold text-indigo-400 mt-0.5">
+                    R$ {nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[11px] font-medium text-slate-500 mt-1">
+                    Vence em {new Date(nextDue.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                  </p>
+                </>
+              ) : (
+                <div className="mt-2">
+                    <h3 className="text-sm font-bold text-emerald-400 flex items-center gap-1">
+                        Nenhum pendente 🎉
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-1">Tudo pago.</p>
+                </div>
+              )}
             </div>
             <div className={iconBadgeClass}><CalendarClock size={20} strokeWidth={2.5} /></div>
           </div>
         </div>
 
-        {/* GRÁFICO 1: EVOLUÇÃO */}
-        <div className={`rounded-[18px] bg-[#23242f] p-8 border border-white/5 shadow-[0_18px_45px_rgba(0,0,0,0.1)]`}>
-            <div className="mb-8 text-center"><h3 className="text-lg font-bold text-white">Receitas vs. Despesas</h3><p className="text-sm text-slate-400">Comparativo anual</p></div>
+        {/* GRÁFICO 1: EVOLUÇÃO COMPARATIVA (LINHA DUPLA) */}
+        <div className="card rounded-[18px]">
+            <div className="mb-8 text-center">
+                <h3 className="text-lg font-bold text-white">Receitas vs. Despesas (Anual)</h3>
+                <p className="text-sm text-slate-400">Comparativo dos últimos 12 meses</p>
+            </div>
             <div className="h-[350px] w-full">
                 {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -326,15 +398,12 @@ export default function DashboardPage() {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" />
                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} tickFormatter={(value) => `${value/1000}k`} />
-                        
-                        {/* TOOLTIP CORRIGIDO AQUI 👇 */}
                         <Tooltip 
                             cursor={{ stroke: '#4F46E5', strokeWidth: 1, strokeDasharray: '5 5' }} 
                             contentStyle={{ borderRadius: '12px', border: 'none', background: '#1E1F2B', boxShadow: '0 10px 30px -5px rgba(0,0,0,0.3)' }} 
                             labelStyle={{ color: '#FFF' }}
-                            formatter={(value: number, name: string) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, name]}
+                            formatter={(value: number, name: string) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, name === 'income' ? 'Receitas' : 'Despesas']}
                         />
-                        
                         <Legend verticalAlign="top" height={36} iconType="circle"/>
                         <Line type="monotone" dataKey="expense" name="Despesas" stroke={colors.red} strokeWidth={3} dot={{ r: 4, fill: colors.red, strokeWidth: 2, stroke: "#1E1F2B" }} activeDot={{ r: 6, fill: "#FCA5A5" }} />
                         <Line type="monotone" dataKey="income" name="Receitas" stroke={colors.green} strokeWidth={3} dot={{ r: 4, fill: colors.green, strokeWidth: 2, stroke: "#1E1F2B" }} activeDot={{ r: 6, fill: "#6EE7B7" }} />
@@ -346,11 +415,12 @@ export default function DashboardPage() {
 
         {/* LINHA 3 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className={`rounded-[18px] bg-[#23242f] p-8 border border-white/5 shadow-[0_18px_45px_rgba(0,0,0,0.1)]`}>
+            <div className="card rounded-[18px]">
                 <div className="mb-6"><h3 className="text-lg font-bold text-white">Para onde vai o dinheiro?</h3><p className="text-sm text-slate-400">Maiores categorias deste mês</p></div>
                 <div className="space-y-5">{topCategories.length > 0 ? (topCategories.map((cat, index) => (<div key={index} className="group"><div className="flex justify-between items-center mb-1.5 text-sm"><span className="font-medium text-slate-300 truncate max-w-[150px]" title={cat.name}>{cat.name}</span><div className="text-right"><span className="font-bold text-white mr-2">R$ {cat.value.toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span><span className="text-xs text-slate-400 bg-white/5 px-1.5 py-0.5 rounded">{cat.percent.toFixed(0)}%</span></div></div><div className="h-3 w-full bg-white/5 rounded-full overflow-hidden"><div className="h-full rounded-full transition-all duration-500 ease-out" style={{ width: `${cat.percent}%`, backgroundColor: index === 0 ? '#4F46E5' : index === 1 ? '#6366F1' : '#8B5CF6' }} /></div></div>))) : ( <div className="flex h-[200px] items-center justify-center text-slate-500">Nenhum gasto neste mês.</div> )}</div>
             </div>
-            <div className={`rounded-[18px] bg-[#23242f] p-8 border border-white/5 shadow-[0_18px_45px_rgba(0,0,0,0.1)]`}>
+
+            <div className="card rounded-[18px]">
                 <div className="mb-6 flex items-center justify-between">
                     <div><h3 className="text-lg font-bold text-white">Evolução por Categoria</h3><p className="text-sm text-slate-400">Histórico de 12 meses</p></div>
                     <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)} className="text-sm border-white/10 rounded-lg py-1.5 px-3 bg-white/5 text-slate-300 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer hover:bg-white/10 [&>option]:bg-[#1E1F2B]">
@@ -362,8 +432,8 @@ export default function DashboardPage() {
             </div>
         </div>
 
-        {/* SEÇÃO PREMIUM */}
-        <div className={`relative rounded-[18px] bg-[#23242f] border border-white/5 overflow-hidden shadow-[0_18px_45px_rgba(0,0,0,0.1)]`}>
+        {/* --- SEÇÃO PREMIUM: CARTÃO --- */}
+        <div className="card rounded-[18px]">
           {userPlan === 'free' && <PremiumOverlay />}
           <div className="p-8">
             <div className="flex items-center gap-3 mb-8">
@@ -371,14 +441,50 @@ export default function DashboardPage() {
               <div><h3 className="text-xl font-bold text-white">Gastos por Categoria (Crédito)</h3><p className="text-sm text-slate-500">Detalhamento das faturas de cartão</p></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              
+              {/* GRÁFICO DE BARRAS HORIZONTAIS (CORRIGIDO) */}
               <div className="h-[300px] flex flex-col items-center justify-center">
                 <h4 className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-wider">Categorias</h4>
-                {ccCategoryData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><BarChart data={ccCategoryData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#333" /><XAxis type="number" hide /><YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#94A3B8' }} width={80} tickLine={false} axisLine={false} /><Tooltip cursor={{ fill: '#ffffff08' }} contentStyle={{ borderRadius: '8px', border: 'none', background: '#1E1F2B', boxShadow: '0 10px 30px -5px rgba(0,0,0,0.3)' }} itemStyle={{color: '#fff'}} formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR')}`, 'Gasto']} /><Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}><Cell fill="#4F46E5"/></Bar></BarChart></ResponsiveContainer>) : (<div className="text-slate-500 text-sm">Sem gastos detalhados.</div>)}
+                {ccCategoryData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart 
+                      data={ccCategoryData} 
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#333" />
+                      <XAxis type="number" hide />
+                      <YAxis 
+                        dataKey="name" 
+                        type="category" 
+                        tick={{ fontSize: 12, fill: '#94A3B8' }} 
+                        width={80} 
+                        tickLine={false} 
+                        axisLine={false} 
+                      />
+                      <Tooltip 
+                        cursor={{ fill: '#ffffff08' }} 
+                        contentStyle={{ borderRadius: '8px', border: 'none', background: '#1E1F2B', boxShadow: '0 10px 30px -5px rgba(0,0,0,0.3)' }} 
+                        itemStyle={{color: '#fff'}} 
+                        formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR')}`, 'Gasto']} 
+                      />
+                      <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
+                        {ccCategoryData.map((entry, index) => (
+                           <Cell key={`cell-${index}`} fill={categoryColors[entry.name] || '#94A3B8'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-slate-500 text-sm">Sem gastos detalhados.</div>
+                )}
               </div>
+
               <div className="flex flex-col justify-center space-y-6">
                 <div className="p-6 bg-indigo-500/5 rounded-xl border border-indigo-500/10">
                   <p className="text-sm text-indigo-300 font-medium mb-1">Total em Faturas</p>
                   <h3 className="text-3xl font-bold text-indigo-400">R$ {ccTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
+                  <p className="text-xs text-indigo-300/60 mt-2">Soma de todas as transações categorizadas.</p>
                 </div>
               </div>
             </div>
@@ -386,7 +492,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className={`rounded-[18px] bg-[#23242f] p-8 border border-white/5 shadow-[0_18px_45px_rgba(0,0,0,0.1)]`}>
+            <div className="card rounded-[18px]">
                 <div className="mb-6 flex items-center gap-2"><div className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-400"><GraphIcon size={18}/></div><h3 className="text-lg font-bold text-white">Crescimento da Fatura</h3></div>
                 <div className="h-[250px] w-full relative">
                     {userPlan === 'free' && <PremiumOverlay />}
@@ -395,6 +501,7 @@ export default function DashboardPage() {
             </div>
             <div className="hidden lg:block"></div>
         </div>
+
       </div>
     </div>
   )

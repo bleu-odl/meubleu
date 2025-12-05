@@ -154,7 +154,7 @@ export default function AccountsPage() {
         </div>
 
         {/* LISTA DE CONTAS DARK */}
-        <div className={`bg-[#23242f] rounded-2xl border border-white/5 overflow-hidden ${cardShadow}`}>
+        <div className="card rounded-2xl overflow-hidden">
           {loading ? (
             <div className="p-8 text-center text-slate-500">Carregando...</div>
           ) : filteredAccounts.length === 0 ? (
@@ -222,7 +222,7 @@ export default function AccountsPage() {
       {/* MODAL DARK */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-[#23242f] rounded-2xl shadow-2xl p-6 border border-white/10 animate-in fade-in zoom-in-95">
+          <div className="card w-full max-w-md p-6 animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white">
                 {editingAccount ? 'Editar Despesa' : 'Nova Despesa'}

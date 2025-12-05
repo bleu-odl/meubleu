@@ -26,7 +26,6 @@ interface CreditCardModalProps {
 export default function CreditCardModal({ isOpen, onClose, expenseId, expenseName, onUpdateTotal }: CreditCardModalProps) {
   const [items, setItems] = useState<any[]>([])
   
-  // Estados de Cadastro
   const [desc, setDesc] = useState('')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
@@ -35,7 +34,6 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
   const [isInstallment, setIsInstallment] = useState(false)
   const [installments, setInstallments] = useState('2')
 
-  // Estados de Edição
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
@@ -71,124 +69,128 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
     
     if (data) {
       setItems(data)
-      // Recalcula o total local baseado apenas nos itens DESTA fatura
       const sum = data.reduce((acc, curr) => acc + curr.amount, 0)
       setTotal(sum)
-      
-      // Garante que o valor da despesa pai esteja sincronizado no banco
       await supabase.from('expenses').update({ value: sum }).eq('id', expenseId)
       onUpdateTotal()
     }
     setLoading(false)
   }
 
-  // --- CADASTRO INTELIGENTE (CORRIGIDO) ---
+  // --- CADASTRO INTELIGENTE (CORRIGIDO PARA FECHAMENTO) ---
   async function handleAddItem(e: React.FormEvent) {
     e.preventDefault()
     if (!desc || !amount || !date) return
 
-    const val = parseFloat(amount.replace(',', '.'))
+    const inputVal = parseFloat(amount.replace(',', '.'))
     const numInstallments = isInstallment ? parseInt(installments) : 1
-    
-    // Pega o usuário atual para poder criar faturas novas se precisar
+    const installmentValue = isInstallment ? (inputVal / numInstallments) : inputVal
+
     const { data: { user } } = await supabase.auth.getUser()
     if(!user) return
 
     setLoading(true)
 
     try {
-        // Loop para processar cada parcela
         for (let i = 0; i < numInstallments; i++) {
-            // 1. Calcular a data da parcela (Mês base + i)
+            // Data real da transação (para registro)
             const targetDate = new Date(date)
             targetDate.setMonth(targetDate.getMonth() + i)
             
-            // Ajuste para evitar pular mês (ex: 31/01 -> 28/02)
+            // Ajuste de fim de mês
             const originalDay = new Date(date).getDate()
             const maxDay = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate()
             targetDate.setDate(Math.min(originalDay, maxDay))
 
-            const targetDateStr = targetDate.toISOString().split('T')[0] // YYYY-MM-DD
+            let targetExpenseId = ''
+            let currentExpenseValue = 0
 
-            // 2. Encontrar a FATURA CORRETA para esse mês
-            // Procuramos uma despesa com o mesmo NOME e no mesmo MÊS/ANO
-            const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1).toISOString()
-            const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).toISOString()
+            // LÓGICA NOVA:
+            if (i === 0) {
+                // PARCELA 1: Força a entrada na fatura ATUAL que o usuário abriu (expenseId)
+                // Isso permite lançar compras de Novembro na fatura de Dezembro
+                targetExpenseId = expenseId
+                // Busca valor atual dessa fatura para somar
+                const { data: currentExp } = await supabase.from('expenses').select('value').eq('id', expenseId).single()
+                currentExpenseValue = currentExp?.value || 0
+            } else {
+                // PARCELAS SEGUINTES: Busca/Cria a fatura do mês correspondente
+                const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1).toISOString()
+                const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).toISOString()
 
-            const { data: existingExpense } = await supabase
-                .from('expenses')
-                .select('id, value')
-                .eq('user_id', user.id)
-                .eq('name', expenseName) // Procura pelo mesmo nome do cartão (ex: "Nubank")
-                .gte('date', startOfMonth)
-                .lte('date', endOfMonth)
-                .single()
-
-            let targetExpenseId = existingExpense?.id
-            let currentExpenseValue = existingExpense?.value || 0
-
-            // 3. Se não existir fatura para aquele mês futuro, cria ela agora!
-            if (!targetExpenseId) {
-                const { data: newExpense, error: createError } = await supabase
+                const { data: existingExpense } = await supabase
                     .from('expenses')
-                    .insert({
-                        user_id: user.id,
-                        name: expenseName,
-                        value: 0, // Começa com 0, vamos somar a parcela jájá
-                        date: targetDateStr,
-                        type: 'variavel', // Cartão tecnicamente é variável
-                        status: 'pendente',
-                        is_credit_card: true // IMPORTANTE: Marca como cartão
-                    })
-                    .select()
-                    .single()
-                
-                if (createError) throw createError
-                targetExpenseId = newExpense.id
+                    .select('id, value')
+                    .eq('user_id', user.id)
+                    .eq('name', expenseName) 
+                    .gte('date', startOfMonth)
+                    .lte('date', endOfMonth)
+                    .maybeSingle()
+
+                if (existingExpense) {
+                    targetExpenseId = existingExpense.id
+                    currentExpenseValue = existingExpense.value
+                } else {
+                    // Cria nova fatura se não existir
+                    const { data: newExpense, error: createError } = await supabase
+                        .from('expenses')
+                        .insert({
+                            user_id: user.id,
+                            name: expenseName,
+                            value: 0,
+                            date: targetDate.toISOString(), // Usa a data futura
+                            type: 'variavel',
+                            status: 'pendente',
+                            is_credit_card: true
+                        })
+                        .select()
+                        .single()
+                    
+                    if (createError) throw createError
+                    targetExpenseId = newExpense.id
+                    currentExpenseValue = 0
+                }
             }
 
-            // 4. Inserir a Transação na fatura certa
+            // Inserir a Transação
             const itemDesc = isInstallment ? `${desc} (${i + 1}/${numInstallments})` : desc
             
             const { error: transError } = await supabase.from('card_transactions').insert({
                 expense_id: targetExpenseId,
                 description: itemDesc,
-                amount: val,
+                amount: installmentValue,
                 category,
-                created_at: targetDate.toISOString()
+                created_at: targetDate.toISOString() // Mantém a data real da compra/parcela
             })
 
             if (transError) throw transError
 
-            // 5. Atualizar o valor total daquela fatura específica
+            // Atualizar total da fatura alvo
             await supabase.from('expenses')
-                .update({ value: currentExpenseValue + val })
+                .update({ value: currentExpenseValue + installmentValue })
                 .eq('id', targetExpenseId)
         }
 
-        // Sucesso! Limpa e recarrega
         setDesc('')
         setAmount('')
         setIsInstallment(false)
         setInstallments('2')
         
-        // Recarrega os itens apenas da fatura ATUAL que estamos vendo
         fetchItems() 
 
     } catch (error: any) {
-        alert('Erro ao processar parcelas: ' + error.message)
+        alert('Erro: ' + error.message)
     } finally {
         setLoading(false)
     }
   }
 
-  // --- EDIÇÃO E DELEÇÃO (Mantidos igual, pois operam no item específico) ---
   function handleStartEdit(item: any) {
     setEditingId(item.id)
     setEditValues({
       description: item.description,
       amount: item.amount.toString(),
-      date: item.created_at.split('T')[0],
+      date: new Date(item.created_at).toISOString().split('T')[0],
       category: item.category
     })
     setOpenMenuId(null)
@@ -197,18 +199,22 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
   function handleCancelEdit() { setEditingId(null) }
 
   async function handleSaveEdit(id: string) {
-    const { error } = await supabase
-      .from('card_transactions')
-      .update({
+    const { error } = await supabase.from('card_transactions').update({
         description: editValues.description,
         amount: parseFloat(editValues.amount),
         category: editValues.category,
         created_at: new Date(editValues.date).toISOString()
-      })
-      .eq('id', id)
+    }).eq('id', id)
 
     if (error) { alert("Erro: " + error.message) } else {
-      fetchItems() // O fetchItems já recalcula o total
+      const { data: allItems } = await supabase.from('card_transactions').select('amount').eq('expense_id', expenseId)
+      if (allItems) {
+        const newTotal = allItems.reduce((acc, curr) => acc + curr.amount, 0)
+        await supabase.from('expenses').update({ value: newTotal }).eq('id', expenseId)
+        setTotal(newTotal)
+        onUpdateTotal()
+      }
+      fetchItems()
       setEditingId(null)
     }
   }
@@ -217,21 +223,19 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
     if (!confirm("Remover este gasto?")) return
     const { error } = await supabase.from('card_transactions').delete().eq('id', id)
     if (!error) {
-      fetchItems() // O fetchItems já recalcula o total e remove o valor
+      fetchItems() 
     }
   }
 
-  function handleToggleMenu(id: string) {
-    if (openMenuId === id) setOpenMenuId(null); else setOpenMenuId(id)
-  }
-
+  function handleToggleMenu(id: string) { if (openMenuId === id) setOpenMenuId(null); else setOpenMenuId(id) }
   if (!isOpen) return null
+
+  const previewInstallmentValue = amount && isInstallment ? (parseFloat(amount.replace(',', '.')) / parseInt(installments)) : 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-3xl bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95">
         
-        {/* Header */}
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
           <div>
             <h2 className="text-xl font-bold text-gray-800">{expenseName}</h2>
@@ -243,10 +247,8 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
           </div>
         </div>
 
-        {/* Corpo */}
         <div className="flex-1 overflow-y-auto p-6">
           
-          {/* Formulário */}
           <form onSubmit={handleAddItem} className="mb-8 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
               <div className="md:col-span-3">
@@ -255,10 +257,10 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
               </div>
               <div className="md:col-span-4">
                 <label className="text-xs font-bold text-gray-500 uppercase ml-1">Descrição</label>
-                <input autoFocus type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ex: Lanche, Uber..." className="w-full rounded-lg border-gray-300 p-2 text-sm focus:ring-blue-500" required />
+                <input autoFocus type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ex: Lanche..." className="w-full rounded-lg border-gray-300 p-2 text-sm focus:ring-blue-500" required />
               </div>
               <div className="md:col-span-2">
-                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Valor {isInstallment ? '(Parcela)' : ''}</label>
+                <label className="text-xs font-bold text-gray-500 uppercase ml-1">{isInstallment ? 'Total' : 'Valor'}</label>
                 <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="w-full rounded-lg border-gray-300 p-2 text-sm focus:ring-blue-500" required />
               </div>
               <div className="md:col-span-2">
@@ -276,7 +278,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
 
             <div className="mt-3 flex items-center gap-4 border-t border-blue-100 pt-3">
                 <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsInstallment(!isInstallment)}>
-                    <div className={`w-4 h-4 border rounded flex items-center justify-center ${isInstallment ? 'bg-blue-600 border-blue-600' : 'border-gray-400 bg-white'}`}>
+                    <div className={`w-4 h-4 border rounded flex items-center justify-center transition-colors ${isInstallment ? 'bg-blue-600 border-blue-600' : 'border-gray-400 bg-white'}`}>
                         {isInstallment && <Plus size={10} className="text-white"/>}
                     </div>
                     <span className="text-sm text-gray-600 font-medium select-none flex items-center gap-1"><Layers size={14}/> Compra Parcelada?</span>
@@ -285,19 +287,24 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
                 {isInstallment && (
                     <div className="flex items-center gap-2 animate-in slide-in-from-left-2 fade-in duration-300">
                         <span className="text-sm text-gray-500">Em</span>
-                        <input type="number" min="2" max="24" value={installments} onChange={(e) => setInstallments(e.target.value)} className="w-16 rounded-md border-gray-300 p-1 text-sm text-center focus:ring-blue-500"/>
-                        <span className="text-sm text-gray-500">vezes</span>
+                        <input type="number" min="2" max="48" value={installments} onChange={(e) => setInstallments(e.target.value)} className="w-14 rounded-md border-gray-300 p-1 text-sm text-center focus:ring-blue-500"/>
+                        <span className="text-sm text-gray-500">x</span>
                     </div>
                 )}
             </div>
+            
+            {isInstallment && amount && (
+                <div className="mt-2 text-xs text-blue-600 font-medium animate-in fade-in">
+                    Serão <span className="font-bold">{installments}x</span> de <span className="font-bold">R$ {previewInstallmentValue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                </div>
+            )}
           </form>
 
-          {/* Lista de Gastos */}
-          <div className="space-y-2">
+          <div className="space-y-2 pb-10">
             {items.length === 0 ? (
               <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl">
                 <Tag className="mx-auto mb-2 opacity-20" size={40}/>
-                Nenhum gasto lançado nesta fatura.
+                Nenhum gasto nesta fatura.
               </div>
             ) : (
               items.map(item => {

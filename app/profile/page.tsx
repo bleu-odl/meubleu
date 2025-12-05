@@ -132,12 +132,12 @@ export default function ProfilePage() {
       <div className="mx-auto max-w-3xl space-y-6"> {/* Largura controlada e pilha vertical */}
         
         {/* 1. CABEÇALHO */}
-        <div className="bg-[#23242f] rounded-2xl p-8 border border-white/5 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left shadow-lg shadow-black/20">
+        <div className="card rounded-2xl p-8 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
           <div className="relative">
             <div className="h-24 w-24 rounded-full bg-indigo-600 flex items-center justify-center text-3xl font-bold text-white shadow-lg ring-4 ring-[#1E1F2B]">
               {getInitials()}
             </div>
-            <div className="absolute bottom-0 right-0 bg-[#23242f] p-1.5 rounded-full border border-white/10 text-slate-400">
+            <div className="absolute bottom-0 right-0 bg-card p-1.5 rounded-full border border-white/10 text-slate-400 shadow-sm">
                <Camera size={16} />
             </div>
           </div>
@@ -156,7 +156,7 @@ export default function ProfilePage() {
         </div>
 
         {/* 2. DADOS PESSOAIS */}
-        <div className="bg-[#23242f] rounded-2xl p-8 border border-white/5 shadow-lg shadow-black/20 relative">
+        <div className="card rounded-2xl p-8 relative">
             {!isEditing && (
                 <button onClick={() => setIsEditing(true)} className="absolute top-6 right-6 p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-full transition-colors">
                     <Edit2 size={20} />
@@ -213,7 +213,7 @@ export default function ProfilePage() {
         </div>
 
         {/* 3. PREFERÊNCIAS FINANCEIRAS */}
-        <div className="bg-[#23242f] rounded-2xl p-8 border border-white/5 shadow-lg shadow-black/20">
+        <div className="card rounded-2xl p-8">
             <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                 <DollarSign size={20} className="text-indigo-500"/> Preferências Financeiras
             </h2>
@@ -241,7 +241,7 @@ export default function ProfilePage() {
         </div>
 
         {/* 4. SEGURANÇA */}
-        <div className="bg-[#23242f] rounded-2xl p-8 border border-white/5 shadow-lg shadow-black/20">
+        <div className="card rounded-2xl p-8">
             <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                 <Shield size={20} className="text-indigo-500"/> Segurança
             </h2>
@@ -299,7 +299,7 @@ export default function ProfilePage() {
         </div>
 
         {/* 5. ZONA DE PERIGO */}
-        <div className="bg-[#23242f] rounded-2xl p-8 border border-red-500/20 shadow-lg shadow-black/20 relative overflow-hidden">
+        <div className="card rounded-2xl p-8 relative overflow-hidden border-red-500/20">
             <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
             <div className="flex items-start gap-4">
                 <div className="p-3 bg-red-500/10 rounded-full text-red-500">
