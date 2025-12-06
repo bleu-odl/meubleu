@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google"; // 1. Importando a fonte
+import { Inter } from "next/font/google"; 
 import "./globals.css";
 import { Sidebar } from "../components/Sidebar";
+import { Header } from "../components/Header"; // 1. IMPORTAR HEADER
 
-// 2. Configurando a fonte
 const inter = Inter({ 
   subsets: ["latin"],
-  weight: ['300', '400', '500', '600', '700'], // Carrega os pesos mais usados
+  weight: ['300', '400', '500', '600', '700'],
   variable: '--font-inter',
 });
 
@@ -22,14 +22,22 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      {/* 3. Aplicando a fonte no BODY */}
       <body className={`${inter.className} antialiased bg-[#1E1F2B] text-slate-100`}>
         <div className="flex min-h-screen">
           
           <Sidebar />
 
-          <main className="flex-1 md:ml-[240px] transition-all duration-300 ease-in-out">
-            {children}
+          {/* 2. ESTRUTURA FLEXÍVEL PARA O CONTEÚDO PRINCIPAL */}
+          <main className="flex-1 flex flex-col md:ml-[240px] transition-all duration-300 ease-in-out">
+            
+            {/* Header fixo no topo */}
+            <Header />
+
+            {/* Conteúdo da página rolando abaixo do header */}
+            <div className="flex-1 overflow-x-hidden">
+              {children}
+            </div>
+            
           </main>
           
         </div>
