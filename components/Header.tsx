@@ -1,15 +1,31 @@
 'use client'
 
-import { Bell, Settings } from 'lucide-react'
+import { Settings, User, LogOut, ChevronDown } from 'lucide-react'
 import { createClient } from '../lib/supabase'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export function Header() {
   const [userName, setUserName] = useState('Usuário')
   const [userInitial, setUserInitial] = useState('U')
   const [userPlan, setUserPlan] = useState('Free')
   
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  
   const supabase = createClient()
+  const router = useRouter()
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: any) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsMenuOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   useEffect(() => {
     async function getUserData() {
@@ -26,37 +42,74 @@ export function Header() {
     getUserData()
   }, [])
 
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
   return (
-    // Altura reduzida para h-16
     <header className="h-16 bg-[#1E1F2B] border-b border-white/5 flex items-center justify-end px-8 sticky top-0 z-40">
       
       <div className="flex items-center gap-6">
         
-        {/* Ícones de Ação */}
-        <div className="flex items-center gap-4 text-slate-400">
-          <button className="hover:text-white transition-colors relative">
-            <Bell size={18} />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full border-2 border-[#1E1F2B]"></span>
-          </button>
-          <button className="hover:text-white transition-colors">
-            <Settings size={18} />
-          </button>
-        </div>
+        {/* Ícones antigos removidos daqui */}
 
-        {/* Separador */}
-        <div className="h-6 w-px bg-white/10"></div>
+        {/* Perfil com Dropdown */}
+        <div className="relative" ref={menuRef}>
+          <button 
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="flex items-center gap-3 group focus:outline-none"
+          >
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-bold text-white group-hover:text-indigo-400 transition-colors">{userName}</p>
+              <p className="text-[9px] text-slate-500 font-medium uppercase tracking-wider">{userPlan}</p>
+            </div>
+            
+            <div className="relative">
+                <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-indigo-900/20 ring-2 ring-[#1E1F2B] group-hover:ring-indigo-500/50 transition-all">
+                    {userInitial}
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-[#1E1F2B] rounded-full p-0.5">
+                    <ChevronDown size={10} className="text-slate-400" />
+                </div>
+            </div>
+          </button>
 
-        {/* Perfil Compacto */}
-        <div className="flex items-center gap-3">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-bold text-white group-hover:text-indigo-400 transition-colors">{userName}</p>
-            <p className="text-[9px] text-slate-500 font-medium uppercase tracking-wider">{userPlan}</p>
-          </div>
-          
-          {/* Avatar menor (h-8) e redondo (rounded-full) */}
-          <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-indigo-900/20 ring-2 ring-[#1E1F2B] cursor-default">
-            {userInitial}
-          </div>
+          {isMenuOpen && (
+            <div className="absolute right-0 top-full mt-3 w-48 bg-[#1E1F2B] border border-white/10 rounded-xl shadow-2xl py-1 animate-in fade-in zoom-in-95 origin-top-right">
+              
+              <div className="px-4 py-3 border-b border-white/5 sm:hidden">
+                <p className="text-xs font-bold text-white">{userName}</p>
+                <p className="text-[10px] text-slate-500 uppercase">{userPlan}</p>
+              </div>
+
+              <div className="p-1">
+                <Link 
+                  href="/profile" 
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  <User size={16} /> Meu Perfil
+                </Link>
+                
+                {/* Mantive Configurações aqui dentro caso precise no futuro */}
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors text-left">
+                  <Settings size={16} /> Configurações
+                </button>
+              </div>
+
+              <div className="h-px bg-white/5 my-1 mx-1"></div>
+
+              <div className="p-1">
+                <button 
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-left"
+                >
+                  <LogOut size={16} /> Sair da conta
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
       </div>

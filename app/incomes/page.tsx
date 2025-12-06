@@ -8,32 +8,21 @@ import {
   TrendingUp, Calendar, Wallet, ListFilter 
 } from 'lucide-react'
 
-// --- CONSTANTES E ESTILOS ---
-// Mantendo a consistência com a página de Expenses, mas usando tema Emerald (Verde)
 const cardClass = "card relative p-5 flex flex-col justify-between h-32 md:h-40"
 const iconBadgeClass = "absolute top-5 right-5 w-9 h-9 rounded-full flex items-center justify-center bg-white/5 text-emerald-400"
 
 export default function IncomesPage() {
   const [incomes, setIncomes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  
-  // Filtros
-  // Inicializa o Ano com o atual, mas permite selecionar "Todos" (-1)
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()) 
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [searchTerm, setSearchTerm] = useState('')
-
-  // Modal e Edição
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formData, setFormData] = useState({ description: '', amount: '', date: '' })
   const [isLoadingSave, setIsLoadingSave] = useState(false)
-  
-  // Controle de Menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValues, setEditValues] = useState({ date: '', amount: '' })
-
-  // Dados para KPIs
   const [totalYear, setTotalYear] = useState(0)
   const [monthlyAverage, setMonthlyAverage] = useState(0)
 
@@ -67,34 +56,27 @@ export default function IncomesPage() {
       return
     }
 
-    // --- 1. BUSCAR DADOS DA LISTA (Com Filtros de Data) ---
+    const { data: userData } = await supabase.from('users').select('financial_start_day').eq('id', user.id).single()
+    const startDay = userData?.financial_start_day || 1
+
     let query = supabase.from('incomes').select('*').eq('user_id', user.id)
 
-    // Lógica de Filtro de Data (Idêntica à de Expenses)
     if (selectedYear !== -1) {
-        const yearStr = selectedYear
-        
         if (selectedMonth !== -1) {
-            // Mês específico
-            const monthStr = String(selectedMonth + 1).padStart(2, '0') 
-            const startDate = `${yearStr}-${monthStr}-01`
-            const lastDay = new Date(selectedYear, selectedMonth + 1, 0).getDate()
-            const endDate = `${yearStr}-${monthStr}-${lastDay}`
-            query = query.gte('date', startDate).lte('date', endDate)
+            const startDateObj = new Date(selectedYear, selectedMonth, startDay)
+            const endDateObj = new Date(selectedYear, selectedMonth + 1, startDay - 1)
+            endDateObj.setHours(23, 59, 59, 999)
+
+            query = query.gte('date', startDateObj.toISOString()).lte('date', endDateObj.toISOString())
         } else {
-            // Ano todo
-            query = query.gte('date', `${yearStr}-01-01`).lte('date', `${yearStr}-12-31`)
+            query = query.gte('date', `${selectedYear}-01-01`).lte('date', `${selectedYear}-12-31`)
         }
     }
-    // Se selectedYear === -1, traz tudo
 
     const { data: listData, error } = await query.order('date', { ascending: true })
     if (error) console.error(error)
     else setIncomes(listData || [])
 
-    // --- 2. DADOS ANUAIS PARA KPIS ---
-    // Se "Todos" estiver selecionado, usamos o ano atual como base para os KPIs de contexto anual,
-    // ou poderíamos calcular sobre todo o histórico. Aqui mantive a lógica de mostrar o contexto do ano atual/selecionado.
     const kpiYear = selectedYear === -1 ? new Date().getFullYear() : selectedYear
     const startYear = `${kpiYear}-01-01`
     const endYear = `${kpiYear}-12-31`
@@ -109,16 +91,12 @@ export default function IncomesPage() {
     if (yearData) {
       const totalY = yearData.reduce((acc, curr) => acc + curr.amount, 0)
       setTotalYear(totalY)
-      
-      // Média baseada nos meses que já passaram ou têm dados
       const currentMonthIndex = new Date().getFullYear() === kpiYear ? new Date().getMonth() + 1 : 12
       setMonthlyAverage(totalY / currentMonthIndex)
     }
     
     setLoading(false)
   }
-
-  // --- AÇÕES DO CRUD ---
 
   function handleToggleMenu(id: string) {
     if (openMenuId === id) setOpenMenuId(null); else setOpenMenuId(id)
@@ -197,7 +175,6 @@ export default function IncomesPage() {
     <div className="min-h-screen p-8 pb-32">
       <div className="mx-auto max-w-6xl space-y-8">
         
-        {/* CABEÇALHO E FILTROS */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-[32px] font-bold text-white tracking-tight">Receitas</h1>
@@ -205,7 +182,6 @@ export default function IncomesPage() {
           </div>
           
           <div className="flex items-center gap-4">
-             {/* Filtro de Data */}
              <div className="card flex items-center p-1.5 rounded-xl h-fit">
                 <div className="flex items-center gap-2 px-3 border-r border-white/10">
                    <Calendar size={16} className="text-emerald-400"/>
@@ -230,15 +206,13 @@ export default function IncomesPage() {
           </div>
         </div>
 
-        {/* KPIs (GRID HORIZONTAL 3 COLUNAS) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* KPI 1: Total do Período */}
             <div className={cardClass}>
                 <div>
                     <p className="text-[13px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
                         {searchTerm ? 'Total da Busca' : 'Total Selecionado'}
                     </p>
-                    <h3 className="text-[32px] font-bold text-white tracking-tight">R$ {totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
+                    <h3 className="text-[32px] font-bold text-white tracking-tight">R$ {totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                 </div>
                 <div className={iconBadgeClass}><DollarSign size={20} strokeWidth={2.5} /></div>
                 <div className="mt-auto">
@@ -248,28 +222,25 @@ export default function IncomesPage() {
                 </div>
             </div>
 
-            {/* KPI 2: Acumulado Anual */}
             <div className={cardClass}>
                 <div>
                     <p className="text-[13px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
                         Acumulado {selectedYear === -1 ? new Date().getFullYear() : selectedYear}
                     </p>
-                    <h3 className="text-[28px] font-bold text-white tracking-tight">R$ {totalYear.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
+                    <h3 className="text-[28px] font-bold text-white tracking-tight">R$ {totalYear.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                 </div>
                 <div className={iconBadgeClass}><TrendingUp size={20}/></div>
             </div>
 
-            {/* KPI 3: Média Mensal */}
             <div className={cardClass}>
                 <div>
                     <p className="text-[13px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Média Mensal</p>
-                    <h3 className="text-[28px] font-bold text-white tracking-tight">R$ {monthlyAverage.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
+                    <h3 className="text-[28px] font-bold text-white tracking-tight">R$ {monthlyAverage.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                 </div>
                 <div className="absolute top-5 right-5 w-9 h-9 rounded-full flex items-center justify-center bg-white/5 text-blue-400"><Wallet size={20}/></div>
             </div>
         </div>
 
-        {/* LISTA DE LANÇAMENTOS (TABELA COM SCROLL) */}
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-white">Histórico de Entradas</h3>
@@ -285,7 +256,6 @@ export default function IncomesPage() {
                 </div>
             </div>
 
-            {/* CONTAINER DA TABELA (Altura Fixa + Scroll Sticky) */}
             <div className="card overflow-hidden rounded-xl border border-white/5 p-0 flex flex-col h-[500px]">
                 <div className="overflow-y-auto flex-1 custom-scrollbar">
                     <table className="min-w-full divide-y divide-white/5">
@@ -322,7 +292,7 @@ export default function IncomesPage() {
                                             {editingId === inc.id ? (
                                                 <input type="number" step="0.01" value={editValues.amount} onChange={(e) => setEditValues({...editValues, amount: e.target.value})} className="w-24 bg-[#13141c] border border-white/20 p-1 rounded text-xs text-emerald-400 font-bold"/>
                                             ) : (
-                                                `+ R$ ${inc.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                                `+ R$ ${inc.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                             )}
                                         </td>
                                         <td className="px-6 py-4 text-right text-sm font-medium relative">
@@ -352,7 +322,6 @@ export default function IncomesPage() {
             </div>
         </div>
 
-        {/* RODAPÉ FIXO INFORMATIVO */}
         <div className="fixed bottom-0 left-0 right-0 bg-[#1E1F2B] border-t border-white/5 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.2)] md:pl-64 z-40 transition-all">
            <div className="mx-auto max-w-6xl flex items-center justify-between">
               <div className="flex items-center gap-2 text-slate-400">
@@ -367,7 +336,6 @@ export default function IncomesPage() {
            </div>
         </div>
 
-        {/* MODAL DARK */}
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <div className="w-full max-w-md bg-[#23242f] rounded-2xl shadow-2xl p-6 border border-white/10 animate-in fade-in zoom-in-95">

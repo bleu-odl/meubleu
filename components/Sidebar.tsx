@@ -1,14 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, List, User, Wallet, Tags, TrendingUp, LogOut } from 'lucide-react'
-import { createClient } from '../lib/supabase'
+import { usePathname } from 'next/navigation'
+// Removi 'User' e 'LogOut' dos imports pois não serão usados aqui
+import { LayoutDashboard, List, Wallet, Tags, TrendingUp } from 'lucide-react'
+// Removi createClient e useRouter pois o logout sairá daqui
 
 export function Sidebar() {
   const pathname = usePathname()
-  const router = useRouter()
-  const supabase = createClient()
   
   if (pathname === '/login' || pathname === '/') {
     return null
@@ -16,10 +15,7 @@ export function Sidebar() {
 
   const primaryColor = '#5B6CFF' 
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
+  // Removida a função handleLogout daqui
 
   const navSections = [
     {
@@ -35,19 +31,13 @@ export function Sidebar() {
         { name: 'Lançamentos', path: '/expenses', icon: List },
         { name: 'Minhas Despesas', path: '/accounts', icon: Tags }
       ]
-    },
-    {
-      title: 'Conta',
-      items: [
-        { name: 'Perfil', path: '/profile', icon: User }
-      ]
     }
+    // Removida a seção 'Conta' (Perfil)
   ]
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-[240px] bg-[#181924] border-r border-white/5 flex flex-col z-50 text-slate-300">
       
-      {/* LOGO - Altura ajustada para h-16 para alinhar com o Header */}
       <div className="h-16 flex items-center px-6 border-b border-white/5 bg-[#1E1F2B]">
         <div className="flex items-center gap-2.5 text-white font-semibold">
           <div 
@@ -60,7 +50,6 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* NAVEGAÇÃO */}
       <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-8">
         {navSections.map((section, idx) => (
           <div key={idx}>
@@ -96,15 +85,9 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* RODAPÉ COM LOGOUT */}
-      <div className="p-4 border-t border-white/5 bg-[#1E1F2B]/50">
-        <button 
-          onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-[13px] font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all group"
-        >
-          <LogOut size={18} className="group-hover:translate-x-1 transition-transform"/>
-          Sair da conta
-        </button>
+      {/* Rodapé removido ou deixado vazio apenas com copyright se desejar */}
+      <div className="p-4 border-t border-white/5 bg-[#1E1F2B]/50 text-center">
+        <span className="text-[10px] text-slate-600">v1.0.0</span>
       </div>
 
     </aside>

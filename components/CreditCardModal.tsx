@@ -71,20 +71,28 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
       setItems(data)
       const sum = data.reduce((acc, curr) => acc + curr.amount, 0)
       setTotal(sum)
+      // Atualiza o total da despesa pai no banco para manter sincronizado
       await supabase.from('expenses').update({ value: sum }).eq('id', expenseId)
       onUpdateTotal()
     }
     setLoading(false)
   }
 
-  // --- CADASTRO INTELIGENTE (CORRIGIDO PARA FECHAMENTO) ---
+  // --- LÓGICA DE CADASTRO COM CÁLCULO BANCÁRIO ---
   async function handleAddItem(e: React.FormEvent) {
     e.preventDefault()
     if (!desc || !amount || !date) return
 
+    // 1. Prepara valores matemáticos
     const inputVal = parseFloat(amount.replace(',', '.'))
     const numInstallments = isInstallment ? parseInt(installments) : 1
-    const installmentValue = isInstallment ? (inputVal / numInstallments) : inputVal
+    
+    // 2. Lógica de Resto (Para não sobrar centavos)
+    // Calcula o valor base arredondado para baixo (ex: 290 / 12 = 24.16)
+    const baseValue = Math.floor((inputVal / numInstallments) * 100) / 100
+    // Calcula a diferença que sobrou (ex: 0.08)
+    const totalBase = baseValue * numInstallments
+    const remainder = Number((inputVal - totalBase).toFixed(2))
 
     const { data: { user } } = await supabase.auth.getUser()
     if(!user) return
@@ -92,31 +100,46 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
     setLoading(true)
 
     try {
+        // 3. Busca data da fatura atual para projeção correta
+        const { data: currentInvoiceData, error: fetchError } = await supabase
+            .from('expenses')
+            .select('date, value')
+            .eq('id', expenseId)
+            .single()
+        
+        if (fetchError || !currentInvoiceData) throw new Error("Fatura atual não encontrada.")
+
+        const baseInvoiceDate = new Date(currentInvoiceData.date)
+
         for (let i = 0; i < numInstallments; i++) {
-            // Data real da transação (para registro)
-            const targetDate = new Date(date)
-            targetDate.setMonth(targetDate.getMonth() + i)
-            
-            // Ajuste de fim de mês
-            const originalDay = new Date(date).getDate()
-            const maxDay = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate()
-            targetDate.setDate(Math.min(originalDay, maxDay))
+            // Data real da transação (apenas para registro histórico)
+            const transactionDate = new Date(date)
+            transactionDate.setMonth(transactionDate.getMonth() + i)
+            // Ajuste para não pular mês (ex: 31 jan -> 28 fev)
+            const maxDayTrans = new Date(transactionDate.getFullYear(), transactionDate.getMonth() + 1, 0).getDate()
+            transactionDate.setDate(Math.min(new Date(date).getDate(), maxDayTrans))
+
+            // Lógica de Valor: 1ª parcela recebe o resto
+            let finalInstallmentValue = baseValue
+            if (i === 0) {
+                finalInstallmentValue = Number((baseValue + remainder).toFixed(2))
+            }
 
             let targetExpenseId = ''
             let currentExpenseValue = 0
 
-            // LÓGICA NOVA:
+            // Lógica de Destino da Parcela
             if (i === 0) {
-                // PARCELA 1: Força a entrada na fatura ATUAL que o usuário abriu (expenseId)
-                // Isso permite lançar compras de Novembro na fatura de Dezembro
+                // Parcela 1 sempre cai na fatura atual aberta
                 targetExpenseId = expenseId
-                // Busca valor atual dessa fatura para somar
-                const { data: currentExp } = await supabase.from('expenses').select('value').eq('id', expenseId).single()
-                currentExpenseValue = currentExp?.value || 0
+                currentExpenseValue = currentInvoiceData.value
             } else {
-                // PARCELAS SEGUINTES: Busca/Cria a fatura do mês correspondente
-                const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1).toISOString()
-                const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).toISOString()
+                // Parcelas seguintes buscam a fatura do mês correspondente ao vencimento
+                const targetInvoiceDate = new Date(baseInvoiceDate)
+                targetInvoiceDate.setMonth(baseInvoiceDate.getMonth() + i)
+
+                const startOfMonth = new Date(targetInvoiceDate.getFullYear(), targetInvoiceDate.getMonth(), 1).toISOString()
+                const endOfMonth = new Date(targetInvoiceDate.getFullYear(), targetInvoiceDate.getMonth() + 1, 0).toISOString()
 
                 const { data: existingExpense } = await supabase
                     .from('expenses')
@@ -131,15 +154,15 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
                     targetExpenseId = existingExpense.id
                     currentExpenseValue = existingExpense.value
                 } else {
-                    // Cria nova fatura se não existir
+                    // Cria nova fatura se não existir no mês futuro
                     const { data: newExpense, error: createError } = await supabase
                         .from('expenses')
                         .insert({
                             user_id: user.id,
                             name: expenseName,
                             value: 0,
-                            date: targetDate.toISOString(), // Usa a data futura
-                            type: 'variavel',
+                            date: targetInvoiceDate.toISOString(),
+                            type: 'variavel', 
                             status: 'pendente',
                             is_credit_card: true
                         })
@@ -152,22 +175,22 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
                 }
             }
 
-            // Inserir a Transação
+            // Inserir Transação
             const itemDesc = isInstallment ? `${desc} (${i + 1}/${numInstallments})` : desc
             
             const { error: transError } = await supabase.from('card_transactions').insert({
                 expense_id: targetExpenseId,
                 description: itemDesc,
-                amount: installmentValue,
+                amount: finalInstallmentValue,
                 category,
-                created_at: targetDate.toISOString() // Mantém a data real da compra/parcela
+                created_at: transactionDate.toISOString()
             })
 
             if (transError) throw transError
 
-            // Atualizar total da fatura alvo
+            // Atualizar valor total da fatura destino
             await supabase.from('expenses')
-                .update({ value: currentExpenseValue + installmentValue })
+                .update({ value: currentExpenseValue + finalInstallmentValue })
                 .eq('id', targetExpenseId)
         }
 
@@ -228,9 +251,29 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
   }
 
   function handleToggleMenu(id: string) { if (openMenuId === id) setOpenMenuId(null); else setOpenMenuId(id) }
-  if (!isOpen) return null
+  
+  // --- CÁLCULO VISUAL DA PREVISÃO ---
+  // Esse bloco calcula exatamente o que será salvo para mostrar ao usuário
+  let previewText = ''
+  if (amount && isInstallment) {
+    const val = parseFloat(amount.replace(',', '.'))
+    const qtd = parseInt(installments)
+    
+    if (val > 0 && qtd > 0) {
+        const base = Math.floor((val / qtd) * 100) / 100
+        const totalBase = base * qtd
+        const rest = Number((val - totalBase).toFixed(2))
+        const first = Number((base + rest).toFixed(2))
 
-  const previewInstallmentValue = amount && isInstallment ? (parseFloat(amount.replace(',', '.')) / parseInt(installments)) : 0
+        if (rest > 0) {
+            previewText = `1x de R$ ${first.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} + ${qtd - 1}x de R$ ${base.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+        } else {
+            previewText = `${qtd}x de R$ ${base.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+        }
+    }
+  }
+
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -243,7 +286,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
           </div>
           <div className="text-right">
             <span className="text-xs text-gray-500 block uppercase font-semibold">Total desta Fatura</span>
-            <span className="text-2xl font-bold text-gray-900">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span className="text-2xl font-bold text-gray-900">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         </div>
 
@@ -293,9 +336,10 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
                 )}
             </div>
             
+            {/* Visualização do resumo da parcela */}
             {isInstallment && amount && (
-                <div className="mt-2 text-xs text-blue-600 font-medium animate-in fade-in">
-                    Serão <span className="font-bold">{installments}x</span> de <span className="font-bold">R$ {previewInstallmentValue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                <div className="mt-2 text-xs text-blue-600 font-medium animate-in fade-in bg-blue-100/50 p-2 rounded-lg border border-blue-200">
+                    Resumo: <span className="font-bold">{previewText}</span>
                 </div>
             )}
           </form>
@@ -334,7 +378,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
                           <span className="font-medium text-gray-700">{item.description}</span>
                         </div>
                         <div className="flex items-center gap-4">
-                          <span className="font-bold text-gray-900">R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          <span className="font-bold text-gray-900">R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           <div className="relative">
                             <button onClick={() => handleToggleMenu(item.id)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full"><MoreVertical size={16}/></button>
                             {openMenuId === item.id && (

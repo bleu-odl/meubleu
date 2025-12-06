@@ -5,8 +5,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   User, LogOut, Shield, Lock, Save, 
-  Camera, AlertTriangle, Edit2, Eye, EyeOff, Check, X, Crown
-} from 'lucide-react' // Adicionado 'Crown'
+  Camera, AlertTriangle, Edit2, Eye, EyeOff, Check, X, Crown, Settings
+} from 'lucide-react' 
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null)
@@ -29,7 +29,7 @@ export default function ProfilePage() {
 
   useEffect(() => { fetchProfile() }, [])
 
-  // Lógica de Força da Senha + Requisitos
+  // Lógica de Força da Senha
   const passwordRequirements = [
     { label: "Mínimo 6 caracteres", met: passwords.new.length >= 6 },
     { label: "Pelo menos um número", met: /[0-9]/.test(passwords.new) },
@@ -58,6 +58,7 @@ export default function ProfilePage() {
         full_name: data.full_name || '', 
         phone: data.phone || '' 
       })
+      // Carrega o dia de início salvo ou usa 1 como padrão
       setFinancialPrefs({ 
         currency: data.currency || 'BRL', 
         start_day: data.financial_start_day || 1 
@@ -70,12 +71,17 @@ export default function ProfilePage() {
     if(!profile) return
     setLoadingSave(true)
 
+    // Validação básica do dia (para não salvar dia 32 ou 0)
+    let safeStartDay = financialPrefs.start_day
+    if (safeStartDay < 1) safeStartDay = 1
+    if (safeStartDay > 31) safeStartDay = 31
+
     const updates = {
       full_name: formData.full_name,
       username: formData.username,
       phone: formData.phone,
       currency: financialPrefs.currency,
-      financial_start_day: financialPrefs.start_day,
+      financial_start_day: safeStartDay, 
       updated_at: new Date().toISOString(),
     }
 
@@ -85,8 +91,10 @@ export default function ProfilePage() {
       alert("Erro ao atualizar: " + error.message)
     } else {
       setProfile({ ...profile, ...updates })
+      setFinancialPrefs(prev => ({ ...prev, start_day: safeStartDay })) // Atualiza visualmente se houve correção
       setIsEditing(false)
       alert("Perfil atualizado com sucesso!")
+      window.location.reload() 
     }
     setLoadingSave(false)
   }
@@ -140,7 +148,7 @@ export default function ProfilePage() {
             <div className="h-24 w-24 rounded-full bg-indigo-600 flex items-center justify-center text-3xl font-bold text-white shadow-lg ring-4 ring-[#1E1F2B]">
               {getInitials()}
             </div>
-            <div className="absolute bottom-0 right-0 bg-card p-1.5 rounded-full border border-white/10 text-slate-400 shadow-sm">
+            <div className="absolute bottom-0 right-0 bg-[#25263A] p-1.5 rounded-full border border-white/10 text-slate-400 shadow-sm">
                <Camera size={16} />
             </div>
           </div>
@@ -149,7 +157,6 @@ export default function ProfilePage() {
             <h1 className="text-2xl font-bold text-white">{formData.full_name || 'Usuário'}</h1>
             <p className="text-slate-400">Minha Conta</p>
             
-            {/* BADGE DE PLANO (LÓGICA ALTERADA AQUI) */}
             {profile?.plano === 'premium' ? (
                 <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
                   <Crown size={12} className="mr-1.5 fill-emerald-400/20"/> Premium
@@ -213,6 +220,57 @@ export default function ProfilePage() {
                     )}
                 </div>
             </div>
+        </div>
+
+        {/* 3. PREFERÊNCIAS FINANCEIRAS */}
+        <div className="card rounded-2xl p-8 relative">
+            {!isEditing && (
+                <button onClick={() => setIsEditing(true)} className="absolute top-6 right-6 p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-full transition-colors">
+                    <Edit2 size={20} />
+                </button>
+            )}
+
+            <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                <Settings size={20} className="text-indigo-500"/> Preferências do Sistema
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Dia de Início do Mês</label>
+                    <p className="text-xs text-slate-400 mb-3">Defina qual dia o seu "mês financeiro" começa (ex: dia do salário).</p>
+                    {isEditing ? (
+                        <input 
+                            type="number" 
+                            min="1" 
+                            max="31"
+                            value={financialPrefs.start_day} 
+                            onChange={e => setFinancialPrefs({...financialPrefs, start_day: parseInt(e.target.value) || 0})} 
+                            className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-slate-600"
+                            placeholder="1"
+                        />
+                    ) : (
+                        <p className="text-slate-300 font-medium text-sm py-2 border-b border-white/5">Dia {financialPrefs.start_day}</p>
+                    )}
+                </div>
+                
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Moeda Principal</label>
+                    <p className="text-xs text-slate-400 mb-3">A moeda padrão para exibição dos valores.</p>
+                     {isEditing ? (
+                        <select 
+                            value={financialPrefs.currency} 
+                            onChange={e => setFinancialPrefs({...financialPrefs, currency: e.target.value})} 
+                            className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                        >
+                            <option value="BRL">Real (BRL)</option>
+                            <option value="USD">Dólar (USD)</option>
+                            <option value="EUR">Euro (EUR)</option>
+                        </select>
+                    ) : (
+                        <p className="text-slate-300 font-medium text-sm py-2 border-b border-white/5">{financialPrefs.currency === 'BRL' ? 'Real (BRL)' : financialPrefs.currency}</p>
+                    )}
+                </div>
+            </div>
 
             {isEditing && (
                 <div className="mt-8 flex justify-end gap-3">
@@ -224,7 +282,7 @@ export default function ProfilePage() {
             )}
         </div>
 
-        {/* 4. SEGURANÇA (MELHORADA) */}
+        {/* 4. SEGURANÇA */}
         <div className="card rounded-2xl p-8">
             <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                 <Shield size={20} className="text-indigo-500"/> Segurança
@@ -232,7 +290,6 @@ export default function ProfilePage() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 
-                {/* Lado Esquerdo: Inputs */}
                 <div className="space-y-5">
                     <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nova Senha</label>
@@ -283,11 +340,9 @@ export default function ProfilePage() {
                     </button>
                 </div>
 
-                {/* Lado Direito: Feedback Visual */}
                 <div className="bg-white/5 rounded-xl p-5 border border-white/5 h-fit">
                     <h3 className="text-sm font-bold text-white mb-4">Requisitos da Senha</h3>
                     
-                    {/* Barra de Força */}
                     <div className="mb-4">
                         <div className="flex justify-between text-xs font-bold text-slate-400 mb-1.5 uppercase">
                             <span>Força</span>
@@ -308,7 +363,6 @@ export default function ProfilePage() {
                         </div>
                     </div>
 
-                    {/* Checklist */}
                     <ul className="space-y-3">
                         {passwordRequirements.map((req, idx) => (
                             <li key={idx} className={`flex items-center gap-3 text-xs font-medium transition-colors duration-200 ${req.met ? 'text-emerald-400' : 'text-slate-500'}`}>
