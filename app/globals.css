@@ -59,3 +59,35 @@ h1, h2, h3 {
   transform: translateY(-3px);
   box-shadow: 0 16px 36px rgba(0,0,0,0.35);
 }
+
+/* ... resto do seu arquivo globals.css ... */
+
+/* =========================================================
+   SCROLLBAR PERSONALIZADA (PREMIUM DARK)
+========================================================= */
+
+/* Funciona no Chrome, Edge e Safari */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px; /* Largura fina */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent; /* Remove o fundo branco feio */
+  margin-block: 4px; /* Pequena margem superior/inferior */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.1); /* Cor da barra (cinza translúcido) */
+  border-radius: 10px; /* Arredondado */
+  transition: background-color 0.2s;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.25); /* Mais claro ao passar o mouse */
+}
+
+/* Compatibilidade com Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin; /* Barra fina */
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent; /* Cor da barra e do fundo */
+}

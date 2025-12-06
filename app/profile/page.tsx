@@ -4,9 +4,9 @@ import { createClient } from '../../lib/supabase'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
-  User, LogOut, Shield, Mail, Lock, Trash2, Save, 
-  Phone, Calendar, DollarSign, Eye, EyeOff, Camera, CheckCircle2, AlertTriangle, Edit2 
-} from 'lucide-react'
+  User, LogOut, Shield, Lock, Save, 
+  Camera, AlertTriangle, Edit2, Eye, EyeOff, Check, X, Crown
+} from 'lucide-react' // Adicionado 'Crown'
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null)
@@ -29,16 +29,19 @@ export default function ProfilePage() {
 
   useEffect(() => { fetchProfile() }, [])
 
-  // Força da senha
+  // Lógica de Força da Senha + Requisitos
+  const passwordRequirements = [
+    { label: "Mínimo 6 caracteres", met: passwords.new.length >= 6 },
+    { label: "Pelo menos um número", met: /[0-9]/.test(passwords.new) },
+    { label: "Letra maiúscula", met: /[A-Z]/.test(passwords.new) },
+  ]
+
   useEffect(() => {
-    const pass = passwords.new
-    let score = 0
-    if (!pass) { setPasswordStrength(0); return }
-    if (pass.length >= 6) score += 1
-    if (pass.length >= 10) score += 1
-    if (/[A-Z]/.test(pass) && /[0-9]/.test(pass)) score += 1
-    setPasswordStrength(score)
+    const metCount = passwordRequirements.filter(r => r.met).length
+    setPasswordStrength(metCount)
   }, [passwords.new])
+
+  const passwordsMatch = passwords.new && passwords.confirm && passwords.new === passwords.confirm
 
   async function fetchProfile() {
     setLoading(true)
@@ -129,7 +132,7 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen p-8 pb-32 bg-[#1E1F2B]">
-      <div className="mx-auto max-w-3xl space-y-6"> {/* Largura controlada e pilha vertical */}
+      <div className="mx-auto max-w-3xl space-y-6">
         
         {/* 1. CABEÇALHO */}
         <div className="card rounded-2xl p-8 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
@@ -145,9 +148,18 @@ export default function ProfilePage() {
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-white">{formData.full_name || 'Usuário'}</h1>
             <p className="text-slate-400">Minha Conta</p>
-            <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <CheckCircle2 size={12} className="mr-1.5"/> Ativa
-            </div>
+            
+            {/* BADGE DE PLANO (LÓGICA ALTERADA AQUI) */}
+            {profile?.plano === 'premium' ? (
+                <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                  <Crown size={12} className="mr-1.5 fill-emerald-400/20"/> Premium
+                </div>
+            ) : (
+                <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-500/10 text-slate-500 border border-slate-500/20">
+                  <User size={12} className="mr-1.5"/> Free
+                </div>
+            )}
+
           </div>
 
           <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/10 rounded-xl transition-colors flex items-center gap-2">
@@ -212,111 +224,125 @@ export default function ProfilePage() {
             )}
         </div>
 
-        {/* 3. PREFERÊNCIAS FINANCEIRAS */}
-        <div className="card rounded-2xl p-8">
-            <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                <DollarSign size={20} className="text-indigo-500"/> Preferências Financeiras
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Moeda Principal</label>
-                    <select value={financialPrefs.currency} onChange={e => setFinancialPrefs({...financialPrefs, currency: e.target.value})} className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none [&>option]:bg-[#181924]">
-                        <option value="BRL">BRL - Real Brasileiro</option>
-                        <option value="USD">USD - Dólar Americano</option>
-                        <option value="EUR">EUR - Euro</option>
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Início do Mês</label>
-                    <select value={financialPrefs.start_day} onChange={e => setFinancialPrefs({...financialPrefs, start_day: parseInt(e.target.value)})} className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none [&>option]:bg-[#181924]">
-                        {[...Array(31)].map((_, i) => (
-                            <option key={i+1} value={i+1}>Dia {i+1}</option>
-                        ))}
-                    </select>
-                </div>
-            </div>
-            <div className="mt-6 flex justify-end">
-                 <button onClick={handleSaveAll} className="text-sm text-indigo-400 font-medium hover:text-indigo-300 hover:underline">Salvar preferências</button>
-            </div>
-        </div>
-
-        {/* 4. SEGURANÇA */}
+        {/* 4. SEGURANÇA (MELHORADA) */}
         <div className="card rounded-2xl p-8">
             <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                 <Shield size={20} className="text-indigo-500"/> Segurança
             </h2>
             
-            <div className="space-y-5 max-w-md">
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nova Senha</label>
-                    <div className="relative">
-                        <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
-                        <input 
-                            type={showPassword ? "text" : "password"} 
-                            value={passwords.new}
-                            onChange={e => setPasswords({...passwords, new: e.target.value})}
-                            className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 pl-10 pr-10 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-slate-600"
-                            placeholder="••••••"
-                        />
-                        <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
-                            {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
-                        </button>
-                    </div>
-                    {/* Barra de Força */}
-                    {passwords.new && (
-                        <div className="mt-2 h-1 w-full bg-[#181924] rounded-full overflow-hidden flex gap-1">
-                            <div className={`h-full flex-1 rounded-full transition-colors ${passwordStrength >= 1 ? 'bg-red-500' : 'bg-transparent'}`}></div>
-                            <div className={`h-full flex-1 rounded-full transition-colors ${passwordStrength >= 2 ? 'bg-yellow-500' : 'bg-transparent'}`}></div>
-                            <div className={`h-full flex-1 rounded-full transition-colors ${passwordStrength >= 3 ? 'bg-emerald-500' : 'bg-transparent'}`}></div>
-                        </div>
-                    )}
-                </div>
-
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Confirmar Senha</label>
-                    <div className="relative">
-                        <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
-                        <input 
-                            type="password" 
-                            value={passwords.confirm}
-                            onChange={e => setPasswords({...passwords, confirm: e.target.value})}
-                            className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 pl-10 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-slate-600"
-                            placeholder="••••••"
-                        />
-                    </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 
-                <div className="pt-2 flex flex-col gap-3">
+                {/* Lado Esquerdo: Inputs */}
+                <div className="space-y-5">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nova Senha</label>
+                        <div className="relative">
+                            <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
+                            <input 
+                                type={showPassword ? "text" : "password"} 
+                                value={passwords.new}
+                                onChange={e => setPasswords({...passwords, new: e.target.value})}
+                                className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 pl-10 pr-10 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-slate-600 transition-all"
+                                placeholder="••••••"
+                            />
+                            <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
+                                {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Confirmar Senha</label>
+                        <div className="relative">
+                            <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
+                            <input 
+                                type="password" 
+                                value={passwords.confirm}
+                                onChange={e => setPasswords({...passwords, confirm: e.target.value})}
+                                className={`w-full rounded-xl border bg-[#181924] p-3 pl-10 text-sm text-white focus:ring-2 outline-none placeholder:text-slate-600 transition-all ${
+                                    passwords.confirm && !passwordsMatch ? 'border-red-500/50 focus:ring-red-500' : 
+                                    passwords.confirm && passwordsMatch ? 'border-emerald-500/50 focus:ring-emerald-500' : 
+                                    'border-white/10 focus:ring-indigo-500'
+                                }`}
+                                placeholder="••••••"
+                            />
+                            {passwords.confirm && (
+                                <div className={`absolute right-3 top-1/2 -translate-y-1/2 ${passwordsMatch ? 'text-emerald-500' : 'text-red-500'}`}>
+                                    {passwordsMatch ? <Check size={16}/> : <X size={16}/>}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
                     <button 
                         onClick={handleChangePassword}
-                        disabled={loadingPass || !passwords.new}
-                        className="w-full py-3 bg-indigo-600 text-white hover:bg-indigo-500 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-900/20 disabled:opacity-50"
+                        disabled={loadingPass || !passwords.new || !passwordsMatch || passwordStrength < 3}
+                        className="w-full py-3 bg-indigo-600 text-white hover:bg-indigo-500 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 mt-4"
                     >
-                        {loadingPass ? 'Salvando...' : 'Atualizar Senha'}
+                        {loadingPass ? 'Atualizando...' : 'Atualizar Senha'}
                     </button>
                 </div>
+
+                {/* Lado Direito: Feedback Visual */}
+                <div className="bg-white/5 rounded-xl p-5 border border-white/5 h-fit">
+                    <h3 className="text-sm font-bold text-white mb-4">Requisitos da Senha</h3>
+                    
+                    {/* Barra de Força */}
+                    <div className="mb-4">
+                        <div className="flex justify-between text-xs font-bold text-slate-400 mb-1.5 uppercase">
+                            <span>Força</span>
+                            <span className={
+                                passwordStrength === 3 ? "text-emerald-400" :
+                                passwordStrength === 2 ? "text-yellow-400" :
+                                "text-red-400"
+                            }>
+                                {passwordStrength === 0 ? "Vazia" :
+                                 passwordStrength === 1 ? "Fraca" :
+                                 passwordStrength === 2 ? "Média" : "Forte"}
+                            </span>
+                        </div>
+                        <div className="h-1.5 w-full bg-[#181924] rounded-full overflow-hidden flex gap-1">
+                            <div className={`h-full flex-1 rounded-full transition-colors duration-300 ${passwordStrength >= 1 ? 'bg-red-500' : 'bg-white/10'}`}></div>
+                            <div className={`h-full flex-1 rounded-full transition-colors duration-300 ${passwordStrength >= 2 ? 'bg-yellow-500' : 'bg-white/10'}`}></div>
+                            <div className={`h-full flex-1 rounded-full transition-colors duration-300 ${passwordStrength >= 3 ? 'bg-emerald-500' : 'bg-white/10'}`}></div>
+                        </div>
+                    </div>
+
+                    {/* Checklist */}
+                    <ul className="space-y-3">
+                        {passwordRequirements.map((req, idx) => (
+                            <li key={idx} className={`flex items-center gap-3 text-xs font-medium transition-colors duration-200 ${req.met ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${req.met ? 'bg-emerald-500/20 border-emerald-500/30' : 'border-white/10 bg-white/5'}`}>
+                                    {req.met && <Check size={12} strokeWidth={3}/>}
+                                </div>
+                                {req.label}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
             </div>
         </div>
 
         {/* 5. ZONA DE PERIGO */}
-        <div className="card rounded-2xl p-8 relative overflow-hidden border-red-500/20">
-            <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
-            <div className="flex items-start gap-4">
-                <div className="p-3 bg-red-500/10 rounded-full text-red-500">
+        <div className="card rounded-2xl p-8 relative overflow-hidden border-red-500/20 group hover:border-red-500/40 transition-colors">
+            <div className="absolute top-0 left-0 w-1 h-full bg-red-500 transition-all group-hover:w-1.5"></div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                <div className="p-4 bg-red-500/10 rounded-full text-red-500 shrink-0">
                     <AlertTriangle size={24} />
                 </div>
                 <div className="flex-1">
                     <h2 className="text-lg font-bold text-white mb-1">Encerrar conta</h2>
-                    <p className="text-sm text-slate-400 mb-4">
-                        Ação irreversível. Seus dados serão apagados permanentemente.
+                    <p className="text-sm text-slate-400">
+                        Esta ação é irreversível. Todos os seus dados, transações e histórico serão apagados permanentemente dos nossos servidores.
                     </p>
-                    <button
-                        onClick={handleDeleteAccount}
-                        className="px-4 py-2 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-lg text-sm font-medium transition-colors"
-                    >
-                        Encerrar conta definitivamente
-                    </button>
                 </div>
+                <button
+                    onClick={handleDeleteAccount}
+                    className="px-5 py-2.5 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-900/0 hover:shadow-red-900/20 whitespace-nowrap"
+                >
+                    Encerrar Conta
+                </button>
             </div>
         </div>
 
