@@ -12,12 +12,8 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
-  
-  // Formulário
   const [formData, setFormData] = useState({ username: '', email: '', full_name: '', phone: '' })
   const [financialPrefs, setFinancialPrefs] = useState({ currency: 'BRL', start_day: 1 })
-  
-  // Segurança
   const [passwords, setPasswords] = useState({ new: '', confirm: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [passwordStrength, setPasswordStrength] = useState(0)
@@ -29,7 +25,6 @@ export default function ProfilePage() {
 
   useEffect(() => { fetchProfile() }, [])
 
-  // Lógica de Força da Senha
   const passwordRequirements = [
     { label: "Mínimo 6 caracteres", met: passwords.new.length >= 6 },
     { label: "Pelo menos um número", met: /[0-9]/.test(passwords.new) },
@@ -58,7 +53,6 @@ export default function ProfilePage() {
         full_name: data.full_name || '', 
         phone: data.phone || '' 
       })
-      // Carrega o dia de início salvo ou usa 1 como padrão
       setFinancialPrefs({ 
         currency: data.currency || 'BRL', 
         start_day: data.financial_start_day || 1 
@@ -70,8 +64,6 @@ export default function ProfilePage() {
   async function handleSaveAll() {
     if(!profile) return
     setLoadingSave(true)
-
-    // Validação básica do dia (para não salvar dia 32 ou 0)
     let safeStartDay = financialPrefs.start_day
     if (safeStartDay < 1) safeStartDay = 1
     if (safeStartDay > 31) safeStartDay = 31
@@ -91,7 +83,7 @@ export default function ProfilePage() {
       alert("Erro ao atualizar: " + error.message)
     } else {
       setProfile({ ...profile, ...updates })
-      setFinancialPrefs(prev => ({ ...prev, start_day: safeStartDay })) // Atualiza visualmente se houve correção
+      setFinancialPrefs(prev => ({ ...prev, start_day: safeStartDay }))
       setIsEditing(false)
       alert("Perfil atualizado com sucesso!")
       window.location.reload() 
@@ -136,37 +128,36 @@ export default function ProfilePage() {
     return name.substring(0, 2).toUpperCase()
   }
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Carregando...</div>
+  if (loading) return <div className="p-8 text-center text-zinc-500">Carregando...</div>
 
   return (
-    <div className="min-h-screen p-8 pb-32 bg-[#1E1F2B]">
+    <div className="min-h-screen p-8 pb-32">
       <div className="mx-auto max-w-3xl space-y-6">
         
-        {/* 1. CABEÇALHO */}
+        {/* CABEÇALHO */}
         <div className="card rounded-2xl p-8 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
           <div className="relative">
-            <div className="h-24 w-24 rounded-full bg-indigo-600 flex items-center justify-center text-3xl font-bold text-white shadow-lg ring-4 ring-[#1E1F2B]">
+            <div className="h-24 w-24 rounded-full bg-indigo-600 flex items-center justify-center text-3xl font-bold text-white shadow-xl ring-4 ring-zinc-950">
               {getInitials()}
             </div>
-            <div className="absolute bottom-0 right-0 bg-[#25263A] p-1.5 rounded-full border border-white/10 text-slate-400 shadow-sm">
+            <div className="absolute bottom-0 right-0 bg-zinc-800 p-1.5 rounded-full border border-white/10 text-zinc-400 shadow-sm">
                <Camera size={16} />
             </div>
           </div>
           
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-white">{formData.full_name || 'Usuário'}</h1>
-            <p className="text-slate-400">Minha Conta</p>
+            <p className="text-zinc-400">Minha Conta</p>
             
             {profile?.plano === 'premium' ? (
                 <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
                   <Crown size={12} className="mr-1.5 fill-emerald-400/20"/> Premium
                 </div>
             ) : (
-                <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-500/10 text-slate-500 border border-slate-500/20">
+                <div className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">
                   <User size={12} className="mr-1.5"/> Free
                 </div>
             )}
-
           </div>
 
           <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/10 rounded-xl transition-colors flex items-center gap-2">
@@ -174,10 +165,10 @@ export default function ProfilePage() {
           </button>
         </div>
 
-        {/* 2. DADOS PESSOAIS */}
+        {/* DADOS PESSOAIS */}
         <div className="card rounded-2xl p-8 relative">
             {!isEditing && (
-                <button onClick={() => setIsEditing(true)} className="absolute top-6 right-6 p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-full transition-colors">
+                <button onClick={() => setIsEditing(true)} className="absolute top-6 right-6 p-2 text-zinc-500 hover:text-white hover:bg-white/5 rounded-full transition-colors">
                     <Edit2 size={20} />
                 </button>
             )}
@@ -188,44 +179,44 @@ export default function ProfilePage() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nome Completo</label>
+                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Nome Completo</label>
                     {isEditing ? (
-                        <input type="text" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none"/>
+                        <input type="text" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="w-full rounded-xl border border-white/10 bg-zinc-950 p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none"/>
                     ) : (
-                        <p className="text-slate-300 font-medium text-sm py-2 border-b border-white/5">{formData.full_name || '-'}</p>
+                        <p className="text-zinc-300 font-medium text-sm py-2 border-b border-white/5">{formData.full_name || '-'}</p>
                     )}
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Usuário</label>
+                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Usuário</label>
                     {isEditing ? (
-                        <input type="text" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none"/>
+                        <input type="text" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} className="w-full rounded-xl border border-white/10 bg-zinc-950 p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none"/>
                     ) : (
-                        <p className="text-slate-300 font-medium text-sm py-2 border-b border-white/5">@{formData.username}</p>
+                        <p className="text-zinc-300 font-medium text-sm py-2 border-b border-white/5">@{formData.username}</p>
                     )}
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Telefone</label>
+                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Telefone</label>
                     {isEditing ? (
-                        <input type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="(00) 00000-0000"/>
+                        <input type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full rounded-xl border border-white/10 bg-zinc-950 p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="(00) 00000-0000"/>
                     ) : (
-                        <p className="text-slate-300 font-medium text-sm py-2 border-b border-white/5">{formData.phone || '-'}</p>
+                        <p className="text-zinc-300 font-medium text-sm py-2 border-b border-white/5">{formData.phone || '-'}</p>
                     )}
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">E-mail</label>
+                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">E-mail</label>
                     {isEditing ? (
-                         <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none"/>
+                         <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full rounded-xl border border-white/10 bg-zinc-950 p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none"/>
                     ) : (
-                        <p className="text-slate-300 font-medium text-sm py-2 border-b border-white/5">{formData.email}</p>
+                        <p className="text-zinc-300 font-medium text-sm py-2 border-b border-white/5">{formData.email}</p>
                     )}
                 </div>
             </div>
         </div>
 
-        {/* 3. PREFERÊNCIAS FINANCEIRAS */}
+        {/* PREFERÊNCIAS FINANCEIRAS */}
         <div className="card rounded-2xl p-8 relative">
             {!isEditing && (
-                <button onClick={() => setIsEditing(true)} className="absolute top-6 right-6 p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-full transition-colors">
+                <button onClick={() => setIsEditing(true)} className="absolute top-6 right-6 p-2 text-zinc-500 hover:text-white hover:bg-white/5 rounded-full transition-colors">
                     <Edit2 size={20} />
                 </button>
             )}
@@ -236,8 +227,8 @@ export default function ProfilePage() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Dia de Início do Mês</label>
-                    <p className="text-xs text-slate-400 mb-3">Defina qual dia o seu "mês financeiro" começa (ex: dia do salário).</p>
+                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Dia de Início do Mês</label>
+                    <p className="text-xs text-zinc-400 mb-3">Defina qual dia o seu "mês financeiro" começa.</p>
                     {isEditing ? (
                         <input 
                             type="number" 
@@ -245,36 +236,36 @@ export default function ProfilePage() {
                             max="31"
                             value={financialPrefs.start_day} 
                             onChange={e => setFinancialPrefs({...financialPrefs, start_day: parseInt(e.target.value) || 0})} 
-                            className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-slate-600"
+                            className="w-full rounded-xl border border-white/10 bg-zinc-950 p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-zinc-600"
                             placeholder="1"
                         />
                     ) : (
-                        <p className="text-slate-300 font-medium text-sm py-2 border-b border-white/5">Dia {financialPrefs.start_day}</p>
+                        <p className="text-zinc-300 font-medium text-sm py-2 border-b border-white/5">Dia {financialPrefs.start_day}</p>
                     )}
                 </div>
                 
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Moeda Principal</label>
-                    <p className="text-xs text-slate-400 mb-3">A moeda padrão para exibição dos valores.</p>
+                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Moeda Principal</label>
+                    <p className="text-xs text-zinc-400 mb-3">A moeda padrão para exibição dos valores.</p>
                      {isEditing ? (
                         <select 
                             value={financialPrefs.currency} 
                             onChange={e => setFinancialPrefs({...financialPrefs, currency: e.target.value})} 
-                            className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                            className="w-full rounded-xl border border-white/10 bg-zinc-950 p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
                         >
                             <option value="BRL">Real (BRL)</option>
                             <option value="USD">Dólar (USD)</option>
                             <option value="EUR">Euro (EUR)</option>
                         </select>
                     ) : (
-                        <p className="text-slate-300 font-medium text-sm py-2 border-b border-white/5">{financialPrefs.currency === 'BRL' ? 'Real (BRL)' : financialPrefs.currency}</p>
+                        <p className="text-zinc-300 font-medium text-sm py-2 border-b border-white/5">{financialPrefs.currency === 'BRL' ? 'Real (BRL)' : financialPrefs.currency}</p>
                     )}
                 </div>
             </div>
 
             {isEditing && (
                 <div className="mt-8 flex justify-end gap-3">
-                    <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm font-medium">Cancelar</button>
+                    <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-zinc-400 hover:text-white transition-colors text-sm font-medium">Cancelar</button>
                     <button onClick={handleSaveAll} disabled={loadingSave} className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-500 transition-all disabled:opacity-50">
                         {loadingSave ? 'Salvando...' : <><Save size={18} /> Salvar</>}
                     </button>
@@ -282,41 +273,40 @@ export default function ProfilePage() {
             )}
         </div>
 
-        {/* 4. SEGURANÇA */}
+        {/* SEGURANÇA */}
         <div className="card rounded-2xl p-8">
             <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                 <Shield size={20} className="text-indigo-500"/> Segurança
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
                 <div className="space-y-5">
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nova Senha</label>
+                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Nova Senha</label>
                         <div className="relative">
-                            <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
+                            <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"/>
                             <input 
                                 type={showPassword ? "text" : "password"} 
                                 value={passwords.new}
                                 onChange={e => setPasswords({...passwords, new: e.target.value})}
-                                className="w-full rounded-xl border border-white/10 bg-[#181924] p-3 pl-10 pr-10 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-slate-600 transition-all"
+                                className="w-full rounded-xl border border-white/10 bg-zinc-950 p-3 pl-10 pr-10 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-zinc-600 transition-all"
                                 placeholder="••••••"
                             />
-                            <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
+                            <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors">
                                 {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
                             </button>
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Confirmar Senha</label>
+                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Confirmar Senha</label>
                         <div className="relative">
-                            <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
+                            <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"/>
                             <input 
                                 type="password" 
                                 value={passwords.confirm}
                                 onChange={e => setPasswords({...passwords, confirm: e.target.value})}
-                                className={`w-full rounded-xl border bg-[#181924] p-3 pl-10 text-sm text-white focus:ring-2 outline-none placeholder:text-slate-600 transition-all ${
+                                className={`w-full rounded-xl border bg-zinc-950 p-3 pl-10 text-sm text-white focus:ring-2 outline-none placeholder:text-zinc-600 transition-all ${
                                     passwords.confirm && !passwordsMatch ? 'border-red-500/50 focus:ring-red-500' : 
                                     passwords.confirm && passwordsMatch ? 'border-emerald-500/50 focus:ring-emerald-500' : 
                                     'border-white/10 focus:ring-indigo-500'
@@ -342,9 +332,8 @@ export default function ProfilePage() {
 
                 <div className="bg-white/5 rounded-xl p-5 border border-white/5 h-fit">
                     <h3 className="text-sm font-bold text-white mb-4">Requisitos da Senha</h3>
-                    
                     <div className="mb-4">
-                        <div className="flex justify-between text-xs font-bold text-slate-400 mb-1.5 uppercase">
+                        <div className="flex justify-between text-xs font-bold text-zinc-400 mb-1.5 uppercase">
                             <span>Força</span>
                             <span className={
                                 passwordStrength === 3 ? "text-emerald-400" :
@@ -356,16 +345,15 @@ export default function ProfilePage() {
                                  passwordStrength === 2 ? "Média" : "Forte"}
                             </span>
                         </div>
-                        <div className="h-1.5 w-full bg-[#181924] rounded-full overflow-hidden flex gap-1">
+                        <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden flex gap-1">
                             <div className={`h-full flex-1 rounded-full transition-colors duration-300 ${passwordStrength >= 1 ? 'bg-red-500' : 'bg-white/10'}`}></div>
                             <div className={`h-full flex-1 rounded-full transition-colors duration-300 ${passwordStrength >= 2 ? 'bg-yellow-500' : 'bg-white/10'}`}></div>
                             <div className={`h-full flex-1 rounded-full transition-colors duration-300 ${passwordStrength >= 3 ? 'bg-emerald-500' : 'bg-white/10'}`}></div>
                         </div>
                     </div>
-
                     <ul className="space-y-3">
                         {passwordRequirements.map((req, idx) => (
-                            <li key={idx} className={`flex items-center gap-3 text-xs font-medium transition-colors duration-200 ${req.met ? 'text-emerald-400' : 'text-slate-500'}`}>
+                            <li key={idx} className={`flex items-center gap-3 text-xs font-medium transition-colors duration-200 ${req.met ? 'text-emerald-400' : 'text-zinc-500'}`}>
                                 <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${req.met ? 'bg-emerald-500/20 border-emerald-500/30' : 'border-white/10 bg-white/5'}`}>
                                     {req.met && <Check size={12} strokeWidth={3}/>}
                                 </div>
@@ -374,11 +362,10 @@ export default function ProfilePage() {
                         ))}
                     </ul>
                 </div>
-
             </div>
         </div>
 
-        {/* 5. ZONA DE PERIGO */}
+        {/* ZONA DE PERIGO */}
         <div className="card rounded-2xl p-8 relative overflow-hidden border-red-500/20 group hover:border-red-500/40 transition-colors">
             <div className="absolute top-0 left-0 w-1 h-full bg-red-500 transition-all group-hover:w-1.5"></div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
@@ -387,13 +374,13 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex-1">
                     <h2 className="text-lg font-bold text-white mb-1">Encerrar conta</h2>
-                    <p className="text-sm text-slate-400">
-                        Esta ação é irreversível. Todos os seus dados, transações e histórico serão apagados permanentemente dos nossos servidores.
+                    <p className="text-sm text-zinc-400">
+                        Esta ação é irreversível. Todos os seus dados serão apagados permanentemente.
                     </p>
                 </div>
                 <button
                     onClick={handleDeleteAccount}
-                    className="px-5 py-2.5 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-red-900/0 hover:shadow-red-900/20 whitespace-nowrap"
+                    className="px-5 py-2.5 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold transition-all whitespace-nowrap"
                 >
                     Encerrar Conta
                 </button>

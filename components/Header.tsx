@@ -48,52 +48,48 @@ export function Header() {
   }
 
   return (
-    <header className="h-16 bg-[#1E1F2B] border-b border-white/5 flex items-center justify-end px-8 sticky top-0 z-40">
+    <header className="h-16 bg-[#09090b]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-end px-8 sticky top-0 z-40">
       
       <div className="flex items-center gap-6">
         
-        {/* Ícones antigos removidos daqui */}
-
-        {/* Perfil com Dropdown */}
         <div className="relative" ref={menuRef}>
           <button 
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="flex items-center gap-3 group focus:outline-none"
           >
             <div className="text-right hidden sm:block">
-              <p className="text-xs font-bold text-white group-hover:text-indigo-400 transition-colors">{userName}</p>
-              <p className="text-[9px] text-slate-500 font-medium uppercase tracking-wider">{userPlan}</p>
+              <p className="text-xs font-bold text-zinc-200 group-hover:text-indigo-400 transition-colors">{userName}</p>
+              <p className="text-[9px] text-zinc-500 font-medium uppercase tracking-wider">{userPlan}</p>
             </div>
             
             <div className="relative">
-                <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-indigo-900/20 ring-2 ring-[#1E1F2B] group-hover:ring-indigo-500/50 transition-all">
+                <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-indigo-900/20 ring-2 ring-[#09090b] group-hover:ring-indigo-500/50 transition-all">
                     {userInitial}
                 </div>
-                <div className="absolute -bottom-1 -right-1 bg-[#1E1F2B] rounded-full p-0.5">
-                    <ChevronDown size={10} className="text-slate-400" />
+                <div className="absolute -bottom-1 -right-1 bg-[#09090b] rounded-full p-0.5">
+                    <ChevronDown size={10} className="text-zinc-400" />
                 </div>
             </div>
           </button>
 
           {isMenuOpen && (
-            <div className="absolute right-0 top-full mt-3 w-48 bg-[#1E1F2B] border border-white/10 rounded-xl shadow-2xl py-1 animate-in fade-in zoom-in-95 origin-top-right">
+            <div className="absolute right-0 top-full mt-3 w-48 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl py-1 animate-in fade-in zoom-in-95 origin-top-right">
               
               <div className="px-4 py-3 border-b border-white/5 sm:hidden">
-                <p className="text-xs font-bold text-white">{userName}</p>
-                <p className="text-[10px] text-slate-500 uppercase">{userPlan}</p>
+                <p className="text-xs font-bold text-zinc-200">{userName}</p>
+                <p className="text-[10px] text-zinc-500 uppercase">{userPlan}</p>
               </div>
 
               <div className="p-1">
                 <Link 
                   href="/profile" 
                   onClick={() => setIsMenuOpen(false)}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
                 >
                   <User size={16} /> Meu Perfil
                 </Link>
                 
-                {/* Mantive Configurações aqui dentro caso precise no futuro */}
-                <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors text-left">
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors text-left">
                   <Settings size={16} /> Configurações
                 </button>
               </div>

@@ -1,30 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --background: #1E1F2B;
-  --foreground: #ededed;
+  /* Nova paleta Zinc "Dark but Light" */
+  --background: #09090b; 
+  --foreground: #fafafa;
+  
+  /* Variáveis auxiliares para cards e bordas */
+  --card: #18181b; 
+  --card-border: rgba(255, 255, 255, 0.08);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter);
-  --font-mono: var(--font-geist-mono);
 }
 
 /* Força o dark mode a usar a mesma cor */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #1E1F2B;
-    --foreground: #ededed;
+    --background: #09090b;
+    --foreground: #fafafa;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   letter-spacing: -0.01em;
+  /* Antialiasing para fontes nítidas no fundo escuro */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 h1, h2, h3 {
@@ -32,62 +39,56 @@ h1, h2, h3 {
 }
 
 /* =========================================================
-   Card / Painel — estilo premium SaaS
+   Card / Painel — Estilo "Clean Glass"
 ========================================================= */
 
 .card {
-  background: linear-gradient(
-    145deg,
-    #25263A,
-    #1F2235
-  );
-
-  border: 1px solid rgba(255,255,255,0.06);
-
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,0.02),
-    0 12px 28px rgba(0,0,0,0.28);
-
-  border-radius: 16px;
-
-  padding: 14px 16px;
-
-  transition: all 0.25s ease;
+  /* Fundo sólido com leve transparência e blur */
+  background-color: rgba(24, 24, 27, 0.6); /* Zinc-900 com 60% opacity */
+  backdrop-filter: blur(12px);
+  
+  /* Borda sutil e elegante */
+  border: 1px solid var(--card-border);
+  
+  /* Sombra suave */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  
+  border-radius: 12px; /* Cantos arredondados, mas não exagerados */
+  padding: 20px;
+  
+  transition: all 0.2s ease-in-out;
 }
 
 .card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 16px 36px rgba(0,0,0,0.35);
+  border-color: rgba(255, 255, 255, 0.15); /* Borda mais clara no hover */
+  transform: translateY(-2px); /* Efeito de elevação */
 }
 
-/* ... resto do seu arquivo globals.css ... */
-
 /* =========================================================
-   SCROLLBAR PERSONALIZADA (PREMIUM DARK)
+   SCROLLBAR PERSONALIZADA (Minimalista)
 ========================================================= */
 
-/* Funciona no Chrome, Edge e Safari */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px; /* Largura fina */
+  width: 5px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent; /* Remove o fundo branco feio */
-  margin-block: 4px; /* Pequena margem superior/inferior */
+  background: transparent;
+  margin-block: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.1); /* Cor da barra (cinza translúcido) */
-  border-radius: 10px; /* Arredondado */
+  background-color: #3f3f46; /* Zinc-700 */
+  border-radius: 10px;
   transition: background-color 0.2s;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.25); /* Mais claro ao passar o mouse */
+  background-color: #52525b; /* Zinc-600 */
 }
 
-/* Compatibilidade com Firefox */
+/* Firefox */
 .custom-scrollbar {
-  scrollbar-width: thin; /* Barra fina */
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent; /* Cor da barra e do fundo */
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
 }

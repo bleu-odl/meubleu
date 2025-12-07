@@ -5,14 +5,14 @@ import { createClient } from '../lib/supabase'
 import { X, Plus, Trash2, Tag, MoreVertical, Edit2, Save, Layers } from 'lucide-react'
 
 const CATEGORIES = [
-  { name: 'Alimentação', color: 'bg-orange-100 text-orange-800' },
-  { name: 'Transporte', color: 'bg-blue-100 text-blue-800' },
-  { name: 'Lazer', color: 'bg-purple-100 text-purple-800' },
-  { name: 'Mercado', color: 'bg-green-100 text-green-800' },
-  { name: 'Serviços', color: 'bg-gray-100 text-gray-800' },
-  { name: 'Compras', color: 'bg-pink-100 text-pink-800' },
-  { name: 'Saúde', color: 'bg-red-100 text-red-800' },
-  { name: 'Outros', color: 'bg-slate-100 text-slate-800' },
+  { name: 'Alimentação', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
+  { name: 'Transporte', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+  { name: 'Lazer', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+  { name: 'Mercado', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  { name: 'Serviços', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' },
+  { name: 'Compras', color: 'bg-pink-500/10 text-pink-400 border-pink-500/20' },
+  { name: 'Saúde', color: 'bg-red-500/10 text-red-400 border-red-500/20' },
+  { name: 'Outros', color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
 ]
 
 interface CreditCardModalProps {
@@ -71,26 +71,19 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
       setItems(data)
       const sum = data.reduce((acc, curr) => acc + curr.amount, 0)
       setTotal(sum)
-      // Atualiza o total da despesa pai no banco para manter sincronizado
       await supabase.from('expenses').update({ value: sum }).eq('id', expenseId)
       onUpdateTotal()
     }
     setLoading(false)
   }
 
-  // --- LÓGICA DE CADASTRO COM CÁLCULO BANCÁRIO ---
   async function handleAddItem(e: React.FormEvent) {
     e.preventDefault()
     if (!desc || !amount || !date) return
 
-    // 1. Prepara valores matemáticos
     const inputVal = parseFloat(amount.replace(',', '.'))
     const numInstallments = isInstallment ? parseInt(installments) : 1
-    
-    // 2. Lógica de Resto (Para não sobrar centavos)
-    // Calcula o valor base arredondado para baixo (ex: 290 / 12 = 24.16)
     const baseValue = Math.floor((inputVal / numInstallments) * 100) / 100
-    // Calcula a diferença que sobrou (ex: 0.08)
     const totalBase = baseValue * numInstallments
     const remainder = Number((inputVal - totalBase).toFixed(2))
 
@@ -100,7 +93,6 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
     setLoading(true)
 
     try {
-        // 3. Busca data da fatura atual para projeção correta
         const { data: currentInvoiceData, error: fetchError } = await supabase
             .from('expenses')
             .select('date, value')
@@ -112,14 +104,11 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
         const baseInvoiceDate = new Date(currentInvoiceData.date)
 
         for (let i = 0; i < numInstallments; i++) {
-            // Data real da transação (apenas para registro histórico)
             const transactionDate = new Date(date)
             transactionDate.setMonth(transactionDate.getMonth() + i)
-            // Ajuste para não pular mês (ex: 31 jan -> 28 fev)
             const maxDayTrans = new Date(transactionDate.getFullYear(), transactionDate.getMonth() + 1, 0).getDate()
             transactionDate.setDate(Math.min(new Date(date).getDate(), maxDayTrans))
 
-            // Lógica de Valor: 1ª parcela recebe o resto
             let finalInstallmentValue = baseValue
             if (i === 0) {
                 finalInstallmentValue = Number((baseValue + remainder).toFixed(2))
@@ -128,13 +117,10 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
             let targetExpenseId = ''
             let currentExpenseValue = 0
 
-            // Lógica de Destino da Parcela
             if (i === 0) {
-                // Parcela 1 sempre cai na fatura atual aberta
                 targetExpenseId = expenseId
                 currentExpenseValue = currentInvoiceData.value
             } else {
-                // Parcelas seguintes buscam a fatura do mês correspondente ao vencimento
                 const targetInvoiceDate = new Date(baseInvoiceDate)
                 targetInvoiceDate.setMonth(baseInvoiceDate.getMonth() + i)
 
@@ -154,7 +140,6 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
                     targetExpenseId = existingExpense.id
                     currentExpenseValue = existingExpense.value
                 } else {
-                    // Cria nova fatura se não existir no mês futuro
                     const { data: newExpense, error: createError } = await supabase
                         .from('expenses')
                         .insert({
@@ -175,7 +160,6 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
                 }
             }
 
-            // Inserir Transação
             const itemDesc = isInstallment ? `${desc} (${i + 1}/${numInstallments})` : desc
             
             const { error: transError } = await supabase.from('card_transactions').insert({
@@ -188,7 +172,6 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
 
             if (transError) throw transError
 
-            // Atualizar valor total da fatura destino
             await supabase.from('expenses')
                 .update({ value: currentExpenseValue + finalInstallmentValue })
                 .eq('id', targetExpenseId)
@@ -198,7 +181,6 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
         setAmount('')
         setIsInstallment(false)
         setInstallments('2')
-        
         fetchItems() 
 
     } catch (error: any) {
@@ -252,139 +234,131 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
 
   function handleToggleMenu(id: string) { if (openMenuId === id) setOpenMenuId(null); else setOpenMenuId(id) }
   
-  // --- CÁLCULO VISUAL DA PREVISÃO ---
-  // Esse bloco calcula exatamente o que será salvo para mostrar ao usuário
   let previewText = ''
   if (amount && isInstallment) {
     const val = parseFloat(amount.replace(',', '.'))
     const qtd = parseInt(installments)
-    
     if (val > 0 && qtd > 0) {
         const base = Math.floor((val / qtd) * 100) / 100
         const totalBase = base * qtd
         const rest = Number((val - totalBase).toFixed(2))
         const first = Number((base + rest).toFixed(2))
-
-        if (rest > 0) {
-            previewText = `1x de R$ ${first.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} + ${qtd - 1}x de R$ ${base.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
-        } else {
-            previewText = `${qtd}x de R$ ${base.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
-        }
+        previewText = rest > 0 ? `1x ${first.toFixed(2)} + ${qtd - 1}x ${base.toFixed(2)}` : `${qtd}x de R$ ${base.toFixed(2)}`
     }
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-3xl bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="w-full max-w-3xl bg-zinc-900 rounded-2xl shadow-2xl border border-white/10 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95">
         
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-zinc-900/50 rounded-t-2xl">
           <div>
-            <h2 className="text-xl font-bold text-gray-800">{expenseName}</h2>
-            <p className="text-sm text-gray-500">Gestão de gastos da fatura</p>
+            <h2 className="text-xl font-bold text-white">{expenseName}</h2>
+            <p className="text-sm text-zinc-400">Gestão de gastos da fatura</p>
           </div>
           <div className="text-right">
-            <span className="text-xs text-gray-500 block uppercase font-semibold">Total desta Fatura</span>
-            <span className="text-2xl font-bold text-gray-900">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="text-xs text-zinc-500 block uppercase font-bold tracking-wider">Total</span>
+            <span className="text-2xl font-bold text-white">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
           
-          <form onSubmit={handleAddItem} className="mb-8 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+          <form onSubmit={handleAddItem} className="mb-8 bg-zinc-800/50 p-4 rounded-xl border border-white/5">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
               <div className="md:col-span-3">
-                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Data</label>
-                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full rounded-lg border-gray-300 p-2 text-sm focus:ring-blue-500" required />
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Data</label>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full rounded-lg border-white/10 bg-zinc-950 p-2.5 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none" required />
               </div>
               <div className="md:col-span-4">
-                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Descrição</label>
-                <input autoFocus type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ex: Lanche..." className="w-full rounded-lg border-gray-300 p-2 text-sm focus:ring-blue-500" required />
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Descrição</label>
+                <input autoFocus type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ex: Lanche..." className="w-full rounded-lg border-white/10 bg-zinc-950 p-2.5 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-zinc-600" required />
               </div>
               <div className="md:col-span-2">
-                <label className="text-xs font-bold text-gray-500 uppercase ml-1">{isInstallment ? 'Total' : 'Valor'}</label>
-                <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="w-full rounded-lg border-gray-300 p-2 text-sm focus:ring-blue-500" required />
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">{isInstallment ? 'Total' : 'Valor'}</label>
+                <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="w-full rounded-lg border-white/10 bg-zinc-950 p-2.5 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-zinc-600" required />
               </div>
               <div className="md:col-span-2">
-                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Categoria</label>
-                <select value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-lg border-gray-300 p-2 text-sm focus:ring-blue-500 bg-white">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Categoria</label>
+                <select value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-lg border-white/10 bg-zinc-950 p-2.5 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
                   {CATEGORIES.map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
                 </select>
               </div>
               <div className="md:col-span-1">
-                <button type="submit" disabled={loading} className="w-full h-[38px] flex items-center justify-center bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition-colors disabled:opacity-50">
+                <button type="submit" disabled={loading} className="w-full h-[42px] flex items-center justify-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all disabled:opacity-50 active:scale-95">
                     {loading ? <span className="animate-spin">⌛</span> : <Plus size={20}/>}
                 </button>
               </div>
             </div>
 
-            <div className="mt-3 flex items-center gap-4 border-t border-blue-100 pt-3">
-                <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsInstallment(!isInstallment)}>
-                    <div className={`w-4 h-4 border rounded flex items-center justify-center transition-colors ${isInstallment ? 'bg-blue-600 border-blue-600' : 'border-gray-400 bg-white'}`}>
+            <div className="mt-4 flex items-center gap-4 border-t border-white/5 pt-4">
+                <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setIsInstallment(!isInstallment)}>
+                    <div className={`w-4 h-4 border rounded flex items-center justify-center transition-colors ${isInstallment ? 'bg-indigo-600 border-indigo-600' : 'border-zinc-600 bg-transparent group-hover:border-zinc-400'}`}>
                         {isInstallment && <Plus size={10} className="text-white"/>}
                     </div>
-                    <span className="text-sm text-gray-600 font-medium select-none flex items-center gap-1"><Layers size={14}/> Compra Parcelada?</span>
+                    <span className={`text-sm font-medium select-none flex items-center gap-1 ${isInstallment ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-300'}`}><Layers size={14}/> Parcelar?</span>
                 </div>
 
                 {isInstallment && (
                     <div className="flex items-center gap-2 animate-in slide-in-from-left-2 fade-in duration-300">
-                        <span className="text-sm text-gray-500">Em</span>
-                        <input type="number" min="2" max="48" value={installments} onChange={(e) => setInstallments(e.target.value)} className="w-14 rounded-md border-gray-300 p-1 text-sm text-center focus:ring-blue-500"/>
-                        <span className="text-sm text-gray-500">x</span>
+                        <span className="text-sm text-zinc-500">Em</span>
+                        <input type="number" min="2" max="48" value={installments} onChange={(e) => setInstallments(e.target.value)} className="w-14 rounded-md border-white/10 bg-zinc-950 p-1 text-sm text-center text-white focus:ring-indigo-500 outline-none"/>
+                        <span className="text-sm text-zinc-500">x</span>
                     </div>
                 )}
             </div>
             
-            {/* Visualização do resumo da parcela */}
             {isInstallment && amount && (
-                <div className="mt-2 text-xs text-blue-600 font-medium animate-in fade-in bg-blue-100/50 p-2 rounded-lg border border-blue-200">
-                    Resumo: <span className="font-bold">{previewText}</span>
+                <div className="mt-3 text-xs text-indigo-300 font-medium animate-in fade-in bg-indigo-500/10 p-2 rounded-lg border border-indigo-500/20">
+                    Resumo: <span className="font-bold text-indigo-200">{previewText}</span>
                 </div>
             )}
           </form>
 
           <div className="space-y-2 pb-10">
             {items.length === 0 ? (
-              <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl">
-                <Tag className="mx-auto mb-2 opacity-20" size={40}/>
+              <div className="text-center py-12 text-zinc-500 border-2 border-dashed border-zinc-800 rounded-xl">
+                <Tag className="mx-auto mb-3 opacity-20" size={40}/>
                 Nenhum gasto nesta fatura.
               </div>
             ) : (
               items.map(item => {
-                const catStyle = CATEGORIES.find(c => c.name === item.category)?.color || 'bg-gray-100 text-gray-800'
+                const catInfo = CATEGORIES.find(c => c.name === item.category)
+                const catStyle = catInfo?.color || 'bg-zinc-800 text-zinc-400 border-white/5'
                 const displayDate = new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })
                 
                 return (
-                  <div key={item.id} className="relative group flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg hover:border-blue-200 transition-colors shadow-sm">
+                  <div key={item.id} className="relative group flex items-center justify-between p-3 bg-zinc-900 border border-white/5 rounded-xl hover:border-white/10 hover:bg-zinc-800/50 transition-all shadow-sm">
                     {editingId === item.id ? (
                       <div className="flex-1 grid grid-cols-12 gap-2 items-center">
-                        <input type="date" value={editValues.date} onChange={e => setEditValues({...editValues, date: e.target.value})} className="col-span-3 border rounded p-1 text-sm"/>
-                        <input type="text" value={editValues.description} onChange={e => setEditValues({...editValues, description: e.target.value})} className="col-span-4 border rounded p-1 text-sm"/>
-                        <input type="number" step="0.01" value={editValues.amount} onChange={e => setEditValues({...editValues, amount: e.target.value})} className="col-span-2 border rounded p-1 text-sm font-bold text-blue-600"/>
-                        <select value={editValues.category} onChange={e => setEditValues({...editValues, category: e.target.value})} className="col-span-2 border rounded p-1 text-sm">
+                        <input type="date" value={editValues.date} onChange={e => setEditValues({...editValues, date: e.target.value})} className="col-span-3 bg-zinc-950 border border-white/10 rounded p-1.5 text-xs text-white"/>
+                        <input type="text" value={editValues.description} onChange={e => setEditValues({...editValues, description: e.target.value})} className="col-span-4 bg-zinc-950 border border-white/10 rounded p-1.5 text-xs text-white"/>
+                        <input type="number" step="0.01" value={editValues.amount} onChange={e => setEditValues({...editValues, amount: e.target.value})} className="col-span-2 bg-zinc-950 border border-white/10 rounded p-1.5 text-xs font-bold text-indigo-400"/>
+                        <select value={editValues.category} onChange={e => setEditValues({...editValues, category: e.target.value})} className="col-span-2 bg-zinc-950 border border-white/10 rounded p-1.5 text-xs text-white">
                             {CATEGORIES.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                         </select>
-                        <div className="col-span-1 flex gap-1">
-                            <button onClick={() => handleSaveEdit(item.id)} className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-200"><Save size={16}/></button>
-                            <button onClick={handleCancelEdit} className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200"><X size={16}/></button>
+                        <div className="col-span-1 flex gap-1 justify-end">
+                            <button onClick={() => handleSaveEdit(item.id)} className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded hover:bg-emerald-500/20"><Save size={14}/></button>
+                            <button onClick={handleCancelEdit} className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20"><X size={14}/></button>
                         </div>
                       </div>
                     ) : (
                       <>
                         <div className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded">{displayDate}</span>
-                          <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wide ${catStyle}`}>{item.category}</span>
-                          <span className="font-medium text-gray-700">{item.description}</span>
+                          <span className="text-xs font-bold text-zinc-500 bg-zinc-950 border border-white/5 px-2 py-1 rounded-md">{displayDate}</span>
+                          <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wide border ${catStyle}`}>{item.category}</span>
+                          <span className="font-medium text-zinc-300">{item.description}</span>
                         </div>
                         <div className="flex items-center gap-4">
-                          <span className="font-bold text-gray-900">R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="font-bold text-white">R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           <div className="relative">
-                            <button onClick={() => handleToggleMenu(item.id)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full"><MoreVertical size={16}/></button>
+                            <button onClick={() => handleToggleMenu(item.id)} className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><MoreVertical size={16}/></button>
                             {openMenuId === item.id && (
-                                <div ref={menuRef} className="absolute right-0 top-8 z-50 w-32 bg-white shadow-lg rounded-md border text-left animate-in fade-in zoom-in-95">
-                                    <button onClick={() => handleStartEdit(item)} className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"><Edit2 size={12}/> Editar</button>
-                                    <button onClick={() => handleDeleteItem(item.id, item.amount)} className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 size={12}/> Excluir</button>
+                                <div ref={menuRef} className="absolute right-0 top-8 z-50 w-32 bg-zinc-900 shadow-xl rounded-lg border border-white/10 text-left animate-in fade-in zoom-in-95 overflow-hidden">
+                                    <button onClick={() => handleStartEdit(item)} className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-white/5 hover:text-white flex items-center gap-2"><Edit2 size={12}/> Editar</button>
+                                    <button onClick={() => handleDeleteItem(item.id, item.amount)} className="w-full text-left px-4 py-2.5 text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2"><Trash2 size={12}/> Excluir</button>
                                 </div>
                             )}
                           </div>
@@ -398,8 +372,8 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
           </div>
 
         </div>
-        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end rounded-b-xl">
-          <button onClick={onClose} className="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-100 transition-colors">Fechar</button>
+        <div className="p-4 border-t border-white/5 bg-zinc-900/50 flex justify-end rounded-b-2xl">
+          <button onClick={onClose} className="px-6 py-2 bg-zinc-800 border border-white/5 text-zinc-300 font-medium rounded-xl hover:bg-zinc-700 hover:text-white transition-colors text-sm">Fechar</button>
         </div>
       </div>
     </div>
