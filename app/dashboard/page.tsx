@@ -87,16 +87,29 @@ export default function DashboardPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
-    const rawName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário'
-    setUserName(rawName.charAt(0).toUpperCase() + rawName.slice(1))
+    // --- NOME DO USUÁRIO ---
+    const { data: userData } = await supabase
+      .from('users')
+      .select('plano, financial_start_day, full_name, username')
+      .eq('id', user.id)
+      .single()
 
-    const { data: userData } = await supabase.from('users').select('plano, financial_start_day').eq('id', user.id).single()
+    let displayName = 'Usuário'
+    if (userData?.full_name) {
+        displayName = userData.full_name.split(' ')[0]
+    } else if (userData?.username) {
+        displayName = userData.username
+    } else if (user.email) {
+        displayName = user.email.split('@')[0]
+    }
+    displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1).toLowerCase()
+    setUserName(displayName)
+
     if (userData) setUserPlan(userData.plano)
-    
     const financialStartDay = userData?.financial_start_day || 1
     setStartDay(financialStartDay)
 
-    // --- DATAS DO CICLO FINANCEIRO ---
+    // --- CICLO FINANCEIRO ---
     const startCurrentDate = new Date(selectedYear, selectedMonth, financialStartDay)
     const endCurrentDate = new Date(selectedYear, selectedMonth + 1, financialStartDay - 1)
     endCurrentDate.setHours(23, 59, 59, 999)
@@ -123,7 +136,7 @@ export default function DashboardPage() {
     const { data: currentIncomes } = await supabase.from('incomes').select('amount').eq('user_id', user.id).gte('date', startCurrent).lte('date', endCurrent)
     const { data: yearIncomes } = await supabase.from('incomes').select('amount, date').eq('user_id', user.id).gte('date', startChartDate)
 
-    // --- DADOS DO CARTÃO ---
+    // --- DADOS CARTÃO ---
     const creditExpenseIds = currentExpenses?.filter(e => e.is_credit_card).map(e => e.id) || []
     let transactions: any[] = []
     if (creditExpenseIds.length > 0) {
@@ -169,7 +182,7 @@ export default function DashboardPage() {
     }
     setHealthScore(Math.round(score))
     
-    // --- CARTÃO E CATEGORIAS ---
+    // --- CARTÃO GRÁFICOS ---
     const ccTotalVal = transactions.reduce((acc, curr) => acc + curr.amount, 0)
     setCcTotal(ccTotalVal)
     const catMap = new Map()
@@ -261,8 +274,22 @@ export default function DashboardPage() {
     return `Receitas e despesas empatadas.`
   }
 
-  const getTransactionsByCategory = (category: string) => {
-    return ccTransactions.filter(t => t.category === category)
+  // --- AGRUPAR TRANSAÇÕES ---
+  const getGroupedTransactions = (category: string) => {
+    const rawList = ccTransactions.filter(t => t.category === category)
+    const groups = new Map<string, { description: string, total: number, count: number }>()
+
+    rawList.forEach(t => {
+        const key = t.description.trim()
+        if (groups.has(key)) {
+            const existing = groups.get(key)!
+            existing.total += t.amount
+            existing.count += 1
+        } else {
+            groups.set(key, { description: key, total: t.amount, count: 1 })
+        }
+    })
+    return Array.from(groups.values()).sort((a, b) => b.total - a.total)
   }
 
   const PremiumOverlay = () => (
@@ -310,7 +337,8 @@ export default function DashboardPage() {
                 <div className={`text-3xl font-black ${scoreTextColor} leading-none flex items-center gap-1`}>
                     <Activity size={20} className="opacity-50" /> {healthScore}
                 </div>
-                <div className="absolute top-full right-0 mt-3 w-64 bg-[#1E1F2B] border border-white/10 rounded-xl shadow-2xl p-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 pointer-events-none">
+                {/* TOOLTIP DO SCORE ALINHADO À ESQUERDA */}
+                <div className="absolute top-full right-0 mt-3 w-64 bg-[#1E1F2B] border border-white/10 rounded-xl shadow-2xl p-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 pointer-events-none text-left">
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-bold text-slate-400 uppercase">Saúde Financeira</span>
                         <span className={`text-xs font-bold ${scoreTextColor}`}>{scoreLabel}</span>
@@ -407,7 +435,7 @@ export default function DashboardPage() {
                             cursor={{ stroke: '#4F46E5', strokeWidth: 1, strokeDasharray: '5 5' }} 
                             contentStyle={{ borderRadius: '12px', border: 'none', background: '#1E1F2B', boxShadow: '0 10px 30px -5px rgba(0,0,0,0.3)' }} 
                             labelStyle={{ color: '#FFF' }}
-                            formatter={(value: number, name: string) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, name === 'income' ? 'Receitas' : 'Despesas']}
+                            formatter={(value: number, name: string) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, name]}
                         />
                         <Legend verticalAlign="top" height={36} iconType="circle"/>
                         {(chartFilter === 'all' || chartFilter === 'expense') && (<Line type="monotone" dataKey="expense" name="Despesas" stroke={colors.red} strokeWidth={3} dot={{ r: 4, fill: colors.red, strokeWidth: 2, stroke: "#1E1F2B" }} activeDot={{ r: 6, fill: colors.red }} animationDuration={1000}/>)}
@@ -489,14 +517,34 @@ export default function DashboardPage() {
                         </button>
                         {isOpen && (
                           <div className="px-4 pb-4 animate-in slide-in-from-top-1 bg-black/20">
-                            <ul className="divide-y divide-white/5">
-                              {getTransactionsByCategory(cat.name).map((t, idx) => (
-                                <li key={idx} className="py-2.5 flex justify-between items-center text-xs">
-                                  <div className="text-slate-400 truncate max-w-[150px] mr-2">{t.description || "Sem descrição"}</div>
-                                  <div className="text-white font-medium whitespace-nowrap">R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <ul className="space-y-1 pt-2">
+                              {/* IMPLEMENTAÇÃO DO AGRUPAMENTO (ALINHADO À ESQUERDA + GAP) */}
+                              {getGroupedTransactions(cat.name).map((group, idx) => (
+                                <li key={idx} className="py-2 flex items-center justify-start gap-3 text-xs border-l-2 border-white/5 pl-3 ml-1 hover:bg-white/5 hover:border-indigo-500/50 transition-all rounded-r-lg">
+                                  
+                                  {/* Descrição */}
+                                  <div className="text-slate-400 font-medium truncate max-w-[140px]" title={group.description}>
+                                    {group.description}
+                                  </div>
+                                  
+                                  {/* Contador (Badge) */}
+                                  {group.count > 1 && (
+                                    <span className="text-[9px] font-bold text-indigo-300 bg-indigo-500/20 px-1.5 py-0.5 rounded-md border border-indigo-500/20">
+                                      {group.count}x
+                                    </span>
+                                  )}
+
+                                  {/* Valor (Logo ao lado agora) */}
+                                  <div className="text-white font-bold whitespace-nowrap">
+                                    R$ {group.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </div>
+
                                 </li>
                               ))}
-                              {getTransactionsByCategory(cat.name).length === 0 && (<li className="py-2 text-center text-xs text-slate-500">Sem itens detalhados.</li>)}
+                              
+                              {getGroupedTransactions(cat.name).length === 0 && (
+                                <li className="py-2 text-center text-xs text-slate-500">Sem itens detalhados.</li>
+                              )}
                             </ul>
                           </div>
                         )}
