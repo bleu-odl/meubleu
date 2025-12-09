@@ -7,13 +7,18 @@ import {
   User, LogOut, Shield, Lock, Save, 
   Camera, AlertTriangle, Edit2, Eye, EyeOff, Check, X, Crown, Settings
 } from 'lucide-react' 
+import { useToast } from '../../components/ToastContext'
 
 export default function ProfilePage() {
+  const { addToast } = useToast()
+
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
+  
   const [formData, setFormData] = useState({ username: '', email: '', full_name: '', phone: '' })
-  const [financialPrefs, setFinancialPrefs] = useState({ currency: 'BRL', start_day: 1 })
+  const [currency, setCurrency] = useState('BRL')
+  
   const [passwords, setPasswords] = useState({ new: '', confirm: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [passwordStrength, setPasswordStrength] = useState(0)
@@ -53,10 +58,7 @@ export default function ProfilePage() {
         full_name: data.full_name || '', 
         phone: data.phone || '' 
       })
-      setFinancialPrefs({ 
-        currency: data.currency || 'BRL', 
-        start_day: data.financial_start_day || 1 
-      })
+      setCurrency(data.currency || 'BRL')
     }
     setLoading(false)
   }
@@ -64,43 +66,39 @@ export default function ProfilePage() {
   async function handleSaveAll() {
     if(!profile) return
     setLoadingSave(true)
-    let safeStartDay = financialPrefs.start_day
-    if (safeStartDay < 1) safeStartDay = 1
-    if (safeStartDay > 31) safeStartDay = 31
 
     const updates = {
       full_name: formData.full_name,
       username: formData.username,
       phone: formData.phone,
-      currency: financialPrefs.currency,
-      financial_start_day: safeStartDay, 
+      currency: currency,
       updated_at: new Date().toISOString(),
     }
 
     const { error } = await supabase.from('users').update(updates).eq('id', profile.id)
 
     if (error) {
-      alert("Erro ao atualizar: " + error.message)
+      addToast("Erro ao atualizar: " + error.message, 'error')
     } else {
       setProfile({ ...profile, ...updates })
-      setFinancialPrefs(prev => ({ ...prev, start_day: safeStartDay }))
       setIsEditing(false)
-      alert("Perfil atualizado com sucesso!")
+      addToast("Perfil atualizado com sucesso!", 'success')
       window.location.reload() 
     }
     setLoadingSave(false)
   }
 
   async function handleChangePassword() {
-    if (!passwords.new) return alert("Digite a nova senha.")
-    if (passwords.new !== passwords.confirm) return alert("As senhas não conferem.")
+    if (!passwords.new) return addToast("Digite a nova senha.", 'info')
+    if (passwords.new !== passwords.confirm) return addToast("As senhas não conferem.", 'error')
     
     setLoadingPass(true)
     const { error } = await supabase.auth.updateUser({ password: passwords.new })
 
-    if (error) { alert("Erro: " + error.message) } 
-    else {
-      alert("Senha atualizada com segurança!")
+    if (error) { 
+        addToast("Erro: " + error.message, 'error') 
+    } else {
+      addToast("Senha atualizada com segurança!", 'success')
       setPasswords({ new: '', confirm: '' })
     }
     setLoadingPass(false)
@@ -111,7 +109,7 @@ export default function ProfilePage() {
     if (confirmText !== 'ENCERRAR') return
 
     const { error } = await supabase.from('users').delete().eq('id', profile.id)
-    if (error) { alert("Erro: " + error.message) } 
+    if (error) { addToast("Erro ao deletar conta: " + error.message, 'error') } 
     else {
       await supabase.auth.signOut()
       router.push('/login')
@@ -213,7 +211,7 @@ export default function ProfilePage() {
             </div>
         </div>
 
-        {/* PREFERÊNCIAS FINANCEIRAS */}
+        {/* PREFERÊNCIAS */}
         <div className="card rounded-2xl p-8 relative">
             {!isEditing && (
                 <button onClick={() => setIsEditing(true)} className="absolute top-6 right-6 p-2 text-zinc-500 hover:text-white hover:bg-white/5 rounded-full transition-colors">
@@ -226,31 +224,14 @@ export default function ProfilePage() {
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Dia de Início do Mês</label>
-                    <p className="text-xs text-zinc-400 mb-3">Defina qual dia o seu "mês financeiro" começa.</p>
-                    {isEditing ? (
-                        <input 
-                            type="number" 
-                            min="1" 
-                            max="31"
-                            value={financialPrefs.start_day} 
-                            onChange={e => setFinancialPrefs({...financialPrefs, start_day: parseInt(e.target.value) || 0})} 
-                            className="w-full rounded-xl border border-white/10 bg-zinc-950 p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-zinc-600"
-                            placeholder="1"
-                        />
-                    ) : (
-                        <p className="text-zinc-300 font-medium text-sm py-2 border-b border-white/5">Dia {financialPrefs.start_day}</p>
-                    )}
-                </div>
                 
                 <div>
                     <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Moeda Principal</label>
                     <p className="text-xs text-zinc-400 mb-3">A moeda padrão para exibição dos valores.</p>
                      {isEditing ? (
                         <select 
-                            value={financialPrefs.currency} 
-                            onChange={e => setFinancialPrefs({...financialPrefs, currency: e.target.value})} 
+                            value={currency} 
+                            onChange={e => setCurrency(e.target.value)} 
                             className="w-full rounded-xl border border-white/10 bg-zinc-950 p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
                         >
                             <option value="BRL">Real (BRL)</option>
@@ -258,7 +239,7 @@ export default function ProfilePage() {
                             <option value="EUR">Euro (EUR)</option>
                         </select>
                     ) : (
-                        <p className="text-zinc-300 font-medium text-sm py-2 border-b border-white/5">{financialPrefs.currency === 'BRL' ? 'Real (BRL)' : financialPrefs.currency}</p>
+                        <p className="text-zinc-300 font-medium text-sm py-2 border-b border-white/5">{currency === 'BRL' ? 'Real (BRL)' : currency}</p>
                     )}
                 </div>
             </div>

@@ -1,5 +1,6 @@
 'use client'
 
+import { DashboardSkeleton } from '../../components/Skeletons'
 import { createClient } from '../../lib/supabase'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -44,7 +45,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState('')
   const [userPlan, setUserPlan] = useState('free') 
-  const [startDay, setStartDay] = useState(1) 
   
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -77,9 +77,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (selectedAccount && rawYearExpenses.length > 0) {
-      processSpecificChart(selectedAccount, rawYearExpenses, startDay)
+      processSpecificChart(selectedAccount, rawYearExpenses)
     }
-  }, [selectedAccount, rawYearExpenses, startDay])
+  }, [selectedAccount, rawYearExpenses])
 
   async function fetchDashboardData() {
     setLoading(true)
@@ -88,7 +88,7 @@ export default function DashboardPage() {
 
     const { data: userData } = await supabase
       .from('users')
-      .select('plano, financial_start_day, full_name, username')
+      .select('plano, full_name, username') 
       .eq('id', user.id)
       .single()
 
@@ -103,37 +103,32 @@ export default function DashboardPage() {
     setUserName(displayName.charAt(0).toUpperCase() + displayName.slice(1).toLowerCase())
 
     if (userData) setUserPlan(userData.plano)
-    const financialStartDay = userData?.financial_start_day || 1
-    setStartDay(financialStartDay)
 
-    const startCurrentDate = new Date(selectedYear, selectedMonth, financialStartDay)
-    const endCurrentDate = new Date(selectedYear, selectedMonth + 1, financialStartDay - 1)
+    // --- LÓGICA DE MÊS CALENDÁRIO (FIXO 1 a 30/31) ---
+    const startCurrentDate = new Date(selectedYear, selectedMonth, 1)
+    const endCurrentDate = new Date(selectedYear, selectedMonth + 1, 0)
     endCurrentDate.setHours(23, 59, 59, 999)
 
-    const startLastDate = new Date(selectedYear, selectedMonth - 1, financialStartDay)
-    const endLastDate = new Date(selectedYear, selectedMonth, financialStartDay - 1)
+    const startLastDate = new Date(selectedYear, selectedMonth - 1, 1)
+    const endLastDate = new Date(selectedYear, selectedMonth, 0)
+    endLastDate.setHours(23, 59, 59, 999)
 
     const date12MonthsAgo = new Date(selectedYear, selectedMonth - 11, 1)
     const startChartDate = date12MonthsAgo.toISOString()
 
+    // --- QUERIES ---
     const { data: currentExpenses } = await supabase.from('expenses').select('id, value, date, name, is_credit_card').eq('user_id', user.id).gte('date', startCurrentDate.toISOString()).lte('date', endCurrentDate.toISOString())
     const { data: lastExpenses } = await supabase.from('expenses').select('value').eq('user_id', user.id).gte('date', startLastDate.toISOString()).lte('date', endLastDate.toISOString())
     
-    const todayStr = new Date().toISOString().split('T')[0]
-    const { data: nextExpenseData } = await supabase.from('expenses').select('name, date, value').eq('user_id', user.id).eq('status', 'pendente').gte('date', todayStr).order('date', { ascending: true }).limit(1).single()
+    const { data: currentIncomes } = await supabase.from('incomes').select('amount').eq('user_id', user.id).gte('date', startCurrentDate.toISOString()).lte('date', endCurrentDate.toISOString())
     
     const { data: yearExpenses } = await supabase.from('expenses').select('value, date, name').eq('user_id', user.id).gte('date', startChartDate).order('date', { ascending: true })
-    const { data: currentIncomes } = await supabase.from('incomes').select('amount').eq('user_id', user.id).gte('date', startCurrentDate.toISOString()).lte('date', endCurrentDate.toISOString())
     const { data: yearIncomes } = await supabase.from('incomes').select('amount, date').eq('user_id', user.id).gte('date', startChartDate)
 
-    const creditExpenseIds = currentExpenses?.filter(e => e.is_credit_card).map(e => e.id) || []
-    let transactions: any[] = []
-    if (creditExpenseIds.length > 0) {
-        const { data: transData } = await supabase.from('card_transactions').select('amount, category, description, created_at').in('expense_id', creditExpenseIds).order('created_at', { ascending: true })
-        transactions = transData || []
-    }
-    setCcTransactions(transactions)
+    const todayStr = new Date().toISOString().split('T')[0]
+    const { data: nextExpenseData } = await supabase.from('expenses').select('name, date, value').eq('user_id', user.id).eq('status', 'pendente').gte('date', todayStr).order('date', { ascending: true }).limit(1).single()
 
+    // --- CÁLCULOS ---
     const sumCurrent = currentExpenses?.reduce((acc, curr) => acc + curr.value, 0) || 0
     const sumLast = lastExpenses?.reduce((acc, curr) => acc + curr.value, 0) || 0
     const sumIncome = currentIncomes?.reduce((acc, curr) => acc + curr.amount, 0) || 0
@@ -165,6 +160,13 @@ export default function DashboardPage() {
     }
     setHealthScore(Math.round(score))
     
+    const creditExpenseIds = currentExpenses?.filter(e => e.is_credit_card).map(e => e.id) || []
+    let transactions: any[] = []
+    if (creditExpenseIds.length > 0) {
+        const { data: transData } = await supabase.from('card_transactions').select('amount, category, description, created_at').in('expense_id', creditExpenseIds).order('created_at', { ascending: true })
+        transactions = transData || []
+    }
+    setCcTransactions(transactions)
     setCcTotal(transactions.reduce((acc, curr) => acc + curr.amount, 0))
     const catMap = new Map()
     transactions.forEach(t => catMap.set(t.category, (catMap.get(t.category) || 0) + t.amount))
@@ -174,9 +176,10 @@ export default function DashboardPage() {
     if (yearExpenses) {
         const uniqueNames = Array.from(new Set(yearExpenses.map(item => item.name))).sort()
         setAccountNames(uniqueNames)
-        if (uniqueNames.length > 0) setSelectedAccount(uniqueNames[0])
+        if (uniqueNames.length > 0 && !selectedAccount) setSelectedAccount(uniqueNames[0])
     }
 
+    // --- GRÁFICO ANUAL ---
     const monthlyDataMap = new Map()
     for (let i = 0; i < 12; i++) {
         const d = new Date(selectedYear, selectedMonth - 11 + i, 1)
@@ -186,9 +189,6 @@ export default function DashboardPage() {
 
     const getCompetenceKey = (dateStr: string) => {
         const d = new Date(dateStr)
-        if (d.getUTCDate() < financialStartDay) {
-            d.setMonth(d.getMonth() - 1)
-        }
         return `${d.getFullYear()}-${d.getMonth()}`
     }
 
@@ -200,6 +200,7 @@ export default function DashboardPage() {
             monthlyDataMap.set(key, c) 
         }
     })
+    
     yearIncomes?.forEach(inc => {
         const key = getCompetenceKey(inc.date)
         if (monthlyDataMap.has(key)) { 
@@ -217,7 +218,7 @@ export default function DashboardPage() {
     setLoading(false)
   }
 
-  function processSpecificChart(accountName: string, allExpenses: any[], startDay: number) {
+  function processSpecificChart(accountName: string, allExpenses: any[]) {
     const tempMap = new Map()
      for (let i = 0; i < 12; i++) {
         const d = new Date(new Date().getFullYear(), selectedMonth - 11 + i, 1)
@@ -226,9 +227,6 @@ export default function DashboardPage() {
      
      const getCompetenceKey = (dateStr: string) => {
         const d = new Date(dateStr)
-        if (d.getUTCDate() < startDay) {
-            d.setMonth(d.getMonth() - 1)
-        }
         return `${d.getFullYear()}-${d.getMonth()}`
     }
 
@@ -283,7 +281,13 @@ export default function DashboardPage() {
     scoreDesc = 'Você está no limite.'
   }
 
-  if (loading) return <div className="p-8 text-center text-zinc-500 text-sm animate-pulse">Carregando dashboard...</div>
+  if (loading) return (
+    <div className="min-h-screen p-8 pb-32">
+      <div className="mx-auto max-w-7xl">
+        <DashboardSkeleton />
+      </div>
+    </div>
+  )
 
   return (
     <div className="min-h-screen p-8 pb-32">
@@ -293,9 +297,11 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
           <div>
             <h1 className="text-3xl font-semibold text-white tracking-tight">Visão Geral</h1>
-            <div className="flex items-center gap-2 mt-1">
+            
+            {/* RESTAURADO: INSIGHT FINANCEIRO */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-2">
               <p className="text-zinc-400 text-sm">Olá, <strong className="text-zinc-200">{userName}</strong></p>
-              <span className="text-zinc-600">•</span>
+              <span className="hidden sm:block text-zinc-600">•</span>
               <div className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-400/90 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/10">
                  <Lightbulb size={10} strokeWidth={3}/> {contextMessage()}
               </div>
@@ -321,10 +327,6 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex items-center bg-zinc-900/50 border border-white/5 rounded-lg p-1">
-               <div className="flex items-center gap-2 px-3 border-r border-white/5">
-                  <CalendarClock size={14} className="text-indigo-400"/>
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Data</span>
-               </div>
                <div className="relative">
                   <select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))} className="bg-transparent text-zinc-300 text-sm font-medium py-1.5 pl-3 pr-2 cursor-pointer hover:text-white transition-colors outline-none [&>option]:bg-zinc-900">
                     {monthNames.map((m, i) => (<option key={i} value={i}>{m}</option>))}
@@ -408,7 +410,7 @@ export default function DashboardPage() {
             <div className="mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
                     <h3 className="text-base font-semibold text-white">Fluxo de Caixa</h3>
-                    <p className="text-xs text-zinc-500">Entradas vs Saídas (12 meses)</p>
+                    <p className="text-xs text-zinc-500">Receitas vs Despesas (12 meses)</p>
                 </div>
                 <div className="bg-zinc-900 border border-white/5 p-0.5 rounded-lg flex">
                     {[{ key: 'all', label: 'Tudo' }, { key: 'income', label: 'Receitas' }, { key: 'expense', label: 'Despesas' }].map((filter) => (
@@ -418,17 +420,18 @@ export default function DashboardPage() {
             </div>
             <div className="h-full w-full pb-6">
                 <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
+                    <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 30, left: -20 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" /> 
                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717a' }} dy={10} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717a' }} tickFormatter={(value) => `${value/1000}k`} />
                         <Tooltip 
                             cursor={{ stroke: '#52525b', strokeWidth: 1 }} 
                             contentStyle={{ borderRadius: '8px', border: '1px solid #27272a', background: '#18181b', color: '#fff', fontSize: '12px' }} 
+                            formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`]}
                         />
-                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}/>
-                        {(chartFilter === 'all' || chartFilter === 'expense') && (<Line type="monotone" dataKey="expense" name="Saídas" stroke={colors.red} strokeWidth={2} dot={false} activeDot={{ r: 4, fill: colors.red }} />)}
-                        {(chartFilter === 'all' || chartFilter === 'income') && (<Line type="monotone" dataKey="income" name="Entradas" stroke={colors.green} strokeWidth={2} dot={false} activeDot={{ r: 4, fill: colors.green }} />)}
+                        <Legend verticalAlign="bottom" align="center" iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }}/>
+                        {(chartFilter === 'all' || chartFilter === 'expense') && (<Line type="monotone" dataKey="expense" name="Despesas" stroke={colors.red} strokeWidth={2} dot={false} activeDot={{ r: 4, fill: colors.red }} />)}
+                        {(chartFilter === 'all' || chartFilter === 'income') && (<Line type="monotone" dataKey="income" name="Receitas" stroke={colors.green} strokeWidth={2} dot={false} activeDot={{ r: 4, fill: colors.green }} />)}
                     </LineChart>
                 </ResponsiveContainer>
             </div>

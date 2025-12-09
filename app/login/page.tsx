@@ -5,8 +5,11 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Link from 'next/link'
 import { Wallet } from 'lucide-react'
+import { useToast } from '../../components/ToastContext'
 
 export default function LoginPage() {
+  const { addToast } = useToast()
+  
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,14 +25,14 @@ export default function LoginPage() {
     if (mode === 'login') {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
-        alert('Erro ao logar: ' + error.message)
+        addToast("Erro ao entrar: " + error.message, 'error')
       } else {
         router.push('/dashboard')
         router.refresh()
       }
     } else {
       if (username.length < 3) {
-        alert("O nome de usuário deve ter pelo menos 3 caracteres.")
+        addToast("O nome de usuário deve ter pelo menos 3 caracteres.", 'info')
         setLoading(false); return
       }
       const cleanUsername = username.replace(/\s/g, '').toLowerCase()
@@ -40,9 +43,9 @@ export default function LoginPage() {
       })
 
       if (error) {
-        alert('Erro ao cadastrar: ' + error.message)
+        addToast("Erro ao cadastrar: " + error.message, 'error')
       } else {
-        alert('Cadastro realizado! Verifique seu e-mail.')
+        addToast("Cadastro realizado! Verifique seu e-mail.", 'success')
         setMode('login')
       }
     }

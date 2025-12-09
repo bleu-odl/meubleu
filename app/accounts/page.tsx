@@ -3,6 +3,8 @@
 import { createClient } from '../../lib/supabase'
 import { useEffect, useState, useRef } from 'react'
 import { Search, Plus, MoreVertical, Edit2, Trash2, X, Check, CreditCard, Tag, GripVertical } from 'lucide-react'
+import { useToast } from '../../components/ToastContext' // 1. IMPORTAR
+
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -31,6 +33,8 @@ function SortableAccountItem({ account, index, total, openEditModal, handleDelet
 }
 
 export default function AccountsPage() {
+  const { addToast } = useToast() // 2. INICIAR HOOK
+
   const [accounts, setAccounts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -50,8 +54,41 @@ export default function AccountsPage() {
   async function saveOrderToSupabase(updatedAccounts: any[]) { const { data: { user } } = await supabase.auth.getUser(); if (!user) return; const updates = updatedAccounts.map((acc, index) => ({ id: acc.id, user_id: user.id, name: acc.name, is_credit_card: acc.is_credit_card, color: acc.color, order_index: index })); await supabase.from('accounts').upsert(updates) }
   function openNewModal() { setEditingAccount(null); setFormData({ name: '', is_credit_card: false, color: COLORS[0].hex }); setIsModalOpen(true) }
   function openEditModal(account: any) { setEditingAccount(account); setFormData({ name: account.name, is_credit_card: account.is_credit_card, color: account.color || COLORS[0].hex }); setOpenMenuId(null); setIsModalOpen(true) }
-  async function handleSave(e: React.FormEvent) { e.preventDefault(); const { data: { user } } = await supabase.auth.getUser(); if (!user || !formData.name.trim()) return; let newIndex = !editingAccount && accounts.length > 0 ? accounts.length : editingAccount ? editingAccount.order_index : 0; if (editingAccount) await supabase.from('accounts').update({ name: formData.name, is_credit_card: formData.is_credit_card, color: formData.color }).eq('id', editingAccount.id); else await supabase.from('accounts').insert({ user_id: user.id, name: formData.name, is_credit_card: formData.is_credit_card, color: formData.color, order_index: newIndex }); setIsModalOpen(false); fetchAccounts() }
-  async function handleDelete(id: string) { if (!confirm('Tem certeza?')) return; await supabase.from('accounts').delete().eq('id', id); fetchAccounts() }
+  
+  async function handleSave(e: React.FormEvent) { 
+    e.preventDefault()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || !formData.name.trim()) return
+
+    let error = null
+    let newIndex = !editingAccount && accounts.length > 0 ? accounts.length : editingAccount ? editingAccount.order_index : 0
+    
+    if (editingAccount) {
+      const { error: err } = await supabase.from('accounts').update({ name: formData.name, is_credit_card: formData.is_credit_card, color: formData.color }).eq('id', editingAccount.id)
+      error = err
+    } else {
+      const { error: err } = await supabase.from('accounts').insert({ user_id: user.id, name: formData.name, is_credit_card: formData.is_credit_card, color: formData.color, order_index: newIndex })
+      error = err
+    }
+
+    if (error) {
+        addToast(error.message, 'error')
+    } else {
+        addToast(editingAccount ? "Conta atualizada!" : "Conta criada com sucesso!", 'success')
+        setIsModalOpen(false)
+        fetchAccounts()
+    }
+  }
+
+  async function handleDelete(id: string) { 
+    if (!confirm('Tem certeza?')) return
+    const { error } = await supabase.from('accounts').delete().eq('id', id)
+    if (error) addToast("Erro ao excluir conta", 'error')
+    else {
+        addToast("Conta excluída", 'success')
+        fetchAccounts()
+    }
+  }
 
   const filteredAccounts = accounts.filter(acc => acc.name.toLowerCase().includes(searchTerm.toLowerCase()))
   const isCustomColor = !COLORS.some(c => c.hex === formData.color)
