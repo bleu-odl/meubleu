@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '../lib/supabase'
 import { X, Plus, Trash2, Tag, MoreVertical, Edit2, Save, Layers } from 'lucide-react'
+import { CardTransaction } from '../lib/types'
+import { formatCurrency, formatDate } from '../lib/utils'
 
 const CATEGORIES = [
   { name: 'Alimentação', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
@@ -24,7 +26,8 @@ interface CreditCardModalProps {
 }
 
 export default function CreditCardModal({ isOpen, onClose, expenseId, expenseName, onUpdateTotal }: CreditCardModalProps) {
-  const [items, setItems] = useState<any[]>([])
+  // Tipagem forte para itens da fatura
+  const [items, setItems] = useState<CardTransaction[]>([])
   
   const [desc, setDesc] = useState('')
   const [amount, setAmount] = useState('')
@@ -50,8 +53,8 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
   }, [isOpen, expenseId])
 
   useEffect(() => {
-    function handleClickOutside(event: any) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setOpenMenuId(null)
       }
     }
@@ -68,9 +71,10 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
       .order('created_at', { ascending: false })
     
     if (data) {
-      setItems(data)
+      setItems(data as CardTransaction[])
       const sum = data.reduce((acc, curr) => acc + curr.amount, 0)
       setTotal(sum)
+      // Atualiza o valor total da despesa pai
       await supabase.from('expenses').update({ value: sum }).eq('id', expenseId)
       onUpdateTotal()
     }
@@ -190,7 +194,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
     }
   }
 
-  function handleStartEdit(item: any) {
+  function handleStartEdit(item: CardTransaction) {
     setEditingId(item.id)
     setEditValues({
       description: item.description,
@@ -212,6 +216,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
     }).eq('id', id)
 
     if (error) { alert("Erro: " + error.message) } else {
+      // Recalcular total da despesa
       const { data: allItems } = await supabase.from('card_transactions').select('amount').eq('expense_id', expenseId)
       if (allItems) {
         const newTotal = allItems.reduce((acc, curr) => acc + curr.amount, 0)
@@ -224,7 +229,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
     }
   }
 
-  async function handleDeleteItem(id: string, itemValue: number) {
+  async function handleDeleteItem(id: string) {
     if (!confirm("Remover este gasto?")) return
     const { error } = await supabase.from('card_transactions').delete().eq('id', id)
     if (!error) {
@@ -243,7 +248,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
         const totalBase = base * qtd
         const rest = Number((val - totalBase).toFixed(2))
         const first = Number((base + rest).toFixed(2))
-        previewText = rest > 0 ? `1x ${first.toFixed(2)} + ${qtd - 1}x ${base.toFixed(2)}` : `${qtd}x de R$ ${base.toFixed(2)}`
+        previewText = rest > 0 ? `1x ${first.toFixed(2)} + ${qtd - 1}x ${base.toFixed(2)}` : `${qtd}x de ${formatCurrency(base)}`
     }
   }
 
@@ -260,7 +265,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
           </div>
           <div className="text-right">
             <span className="text-xs text-zinc-500 block uppercase font-bold tracking-wider">Total</span>
-            <span className="text-2xl font-bold text-white">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="text-2xl font-bold text-white">{formatCurrency(total)}</span>
           </div>
         </div>
 
@@ -327,7 +332,6 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
               items.map(item => {
                 const catInfo = CATEGORIES.find(c => c.name === item.category)
                 const catStyle = catInfo?.color || 'bg-zinc-800 text-zinc-400 border-white/5'
-                const displayDate = new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })
                 
                 return (
                   <div key={item.id} className="relative group flex items-center justify-between p-3 bg-zinc-900 border border-white/5 rounded-xl hover:border-white/10 hover:bg-zinc-800/50 transition-all shadow-sm">
@@ -347,18 +351,18 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
                     ) : (
                       <>
                         <div className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-zinc-500 bg-zinc-950 border border-white/5 px-2 py-1 rounded-md">{displayDate}</span>
+                          <span className="text-xs font-bold text-zinc-500 bg-zinc-950 border border-white/5 px-2 py-1 rounded-md">{formatDate(item.created_at)}</span>
                           <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wide border ${catStyle}`}>{item.category}</span>
                           <span className="font-medium text-zinc-300">{item.description}</span>
                         </div>
                         <div className="flex items-center gap-4">
-                          <span className="font-bold text-white">R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="font-bold text-white">{formatCurrency(item.amount)}</span>
                           <div className="relative">
                             <button onClick={() => handleToggleMenu(item.id)} className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><MoreVertical size={16}/></button>
                             {openMenuId === item.id && (
                                 <div ref={menuRef} className="absolute right-0 top-8 z-50 w-32 bg-zinc-900 shadow-xl rounded-lg border border-white/10 text-left animate-in fade-in zoom-in-95 overflow-hidden">
                                     <button onClick={() => handleStartEdit(item)} className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-white/5 hover:text-white flex items-center gap-2"><Edit2 size={12}/> Editar</button>
-                                    <button onClick={() => handleDeleteItem(item.id, item.amount)} className="w-full text-left px-4 py-2.5 text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2"><Trash2 size={12}/> Excluir</button>
+                                    <button onClick={() => handleDeleteItem(item.id)} className="w-full text-left px-4 py-2.5 text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2"><Trash2 size={12}/> Excluir</button>
                                 </div>
                             )}
                           </div>

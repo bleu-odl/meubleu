@@ -8,27 +8,33 @@ import {
   Plus, Trash2, Search, DollarSign, X, Save, MoreVertical, Edit2, 
   TrendingUp, Calendar, Wallet, ListFilter 
 } from 'lucide-react'
-// 1. Importar o hook de Toast
 import { useToast } from '../../components/ToastContext'
+
+// Importando Tipos e Utils
+import { Income } from '../../lib/types'
+import { formatCurrency, formatDate } from '../../lib/utils'
 
 const cardClass = "card relative p-5 flex flex-col justify-between h-32 md:h-40"
 const iconBadgeClass = "absolute top-5 right-5 w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 border border-white/10 text-emerald-400"
 
 export default function IncomesPage() {
-  // 2. Iniciar o hook
   const { addToast } = useToast()
 
-  const [incomes, setIncomes] = useState<any[]>([])
+  // Tipagem forte aqui
+  const [incomes, setIncomes] = useState<Income[]>([])
   const [loading, setLoading] = useState(true)
+  
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()) 
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formData, setFormData] = useState({ description: '', amount: '', date: '' })
   const [isLoadingSave, setIsLoadingSave] = useState(false)
+  
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValues, setEditValues] = useState({ date: '', amount: '' })
+  
   const [totalYear, setTotalYear] = useState(0)
   const [monthlyAverage, setMonthlyAverage] = useState(0)
 
@@ -40,8 +46,8 @@ export default function IncomesPage() {
   const years = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i)
 
   useEffect(() => {
-    function handleClickOutside(event: any) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setOpenMenuId(null)
       }
     }
@@ -77,8 +83,9 @@ export default function IncomesPage() {
 
     const { data: listData, error } = await query.order('date', { ascending: true })
     if (error) console.error(error)
-    else setIncomes(listData || [])
+    else setIncomes((listData as Income[]) || [])
 
+    // KPI Logic
     const kpiYear = selectedYear === -1 ? new Date().getFullYear() : selectedYear
     const startYear = `${kpiYear}-01-01`
     const endYear = `${kpiYear}-12-31`
@@ -100,8 +107,17 @@ export default function IncomesPage() {
     setLoading(false)
   }
 
-  function handleToggleMenu(id: string) { if (openMenuId === id) setOpenMenuId(null); else setOpenMenuId(id) }
-  function handleStartEdit(income: any) { setEditingId(income.id); setEditValues({ date: income.date.split('T')[0], amount: income.amount.toString() }); setOpenMenuId(null) }
+  function handleToggleMenu(id: string) { setOpenMenuId(prev => prev === id ? null : id) }
+  
+  function handleStartEdit(income: Income) { 
+    setEditingId(income.id)
+    setEditValues({ 
+        date: income.date.split('T')[0], 
+        amount: income.amount.toString() 
+    })
+    setOpenMenuId(null) 
+  }
+  
   function handleCancelEdit() { setEditingId(null); setEditValues({ date: '', amount: '' }) }
   
   async function handleSaveEdit(id: string) {
@@ -204,7 +220,7 @@ export default function IncomesPage() {
                     <p className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">
                         {searchTerm ? 'Busca' : 'Total Selecionado'}
                     </p>
-                    <h3 className="text-2xl font-bold text-white tracking-tight">R$ {totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    <h3 className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalAmount)}</h3>
                 </div>
                 <div className={iconBadgeClass}><DollarSign size={18} strokeWidth={2} /></div>
                 <div className="mt-auto">
@@ -219,7 +235,7 @@ export default function IncomesPage() {
                     <p className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">
                         Acumulado {selectedYear === -1 ? new Date().getFullYear() : selectedYear}
                     </p>
-                    <h3 className="text-2xl font-bold text-white tracking-tight">R$ {totalYear.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    <h3 className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalYear)}</h3>
                 </div>
                 <div className={iconBadgeClass}><TrendingUp size={18}/></div>
             </div>
@@ -227,7 +243,7 @@ export default function IncomesPage() {
             <div className={cardClass}>
                 <div>
                     <p className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">Média Mensal</p>
-                    <h3 className="text-2xl font-bold text-white tracking-tight">R$ {monthlyAverage.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    <h3 className="text-2xl font-bold text-white tracking-tight">{formatCurrency(monthlyAverage)}</h3>
                 </div>
                 <div className="absolute top-5 right-5 w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 border border-white/10 text-blue-400"><Wallet size={18}/></div>
             </div>
@@ -271,7 +287,7 @@ export default function IncomesPage() {
                                             {editingId === inc.id ? (
                                                 <input type="date" value={editValues.date} onChange={(e) => setEditValues({...editValues, date: e.target.value})} className="bg-zinc-800 text-white border border-white/10 p-1 rounded w-full"/>
                                             ) : (
-                                                new Date(inc.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+                                                formatDate(inc.date)
                                             )}
                                         </td>
                                         <td className="px-6 py-3 text-xs text-white">
@@ -284,7 +300,7 @@ export default function IncomesPage() {
                                             {editingId === inc.id ? (
                                                 <input type="number" step="0.01" value={editValues.amount} onChange={(e) => setEditValues({...editValues, amount: e.target.value})} className="w-20 bg-zinc-800 border border-white/10 p-1 rounded font-bold"/>
                                             ) : (
-                                                `+ R$ ${inc.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                `+ ${formatCurrency(inc.amount)}`
                                             )}
                                         </td>
                                         <td className="px-6 py-3 text-right text-xs font-medium relative">
@@ -312,18 +328,6 @@ export default function IncomesPage() {
                     </table>
                 </div>
             </div>
-        </div>
-
-        <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/80 backdrop-blur border-t border-white/5 p-3 md:pl-64 z-40">
-           <div className="mx-auto max-w-6xl flex items-center justify-between text-xs text-zinc-500">
-              <div className="flex items-center gap-2">
-                <ListFilter size={14} />
-                <span>Exibindo <strong className="text-zinc-300">{filteredIncomes.length}</strong> entradas</span>
-              </div>
-              <div className="hidden sm:block">
-                 Filtro: {selectedYear === -1 ? 'Todo o Histórico' : (selectedMonth === -1 ? `Ano de ${selectedYear}` : `${months[selectedMonth]} de ${selectedYear}`)}
-              </div>
-           </div>
         </div>
 
         {isModalOpen && (

@@ -12,24 +12,28 @@ import {
 import NewExpenseModal from '../../components/NewExpenseModal'
 import CreditCardModal from '../../components/CreditCardModal'
 import UpgradeModal from '../../components/UpgradeModal'
-// 1. Importar o hook
 import { useToast } from '../../components/ToastContext'
 
-// --- ESTILOS PADRONIZADOS (ZINC THEME) ---
+// Importando Tipos e Utils
+import { Expense, Account, CreateExpenseDTO } from '../../lib/types'
+import { formatCurrency, formatDate } from '../../lib/utils'
+
+const pillBaseClass = "inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[10px] font-medium whitespace-nowrap transition-colors border"
 const cardClass = "card relative p-5 flex flex-col justify-between h-32 md:h-40"
 const iconBadgeClass = "absolute top-5 right-5 w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 border border-white/10 text-rose-400"
-const pillBaseClass = "inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[10px] font-medium whitespace-nowrap transition-colors border"
 
 export default function ExpensesPage() {
-  // 2. Iniciar o hook
   const { addToast } = useToast()
+  const router = useRouter()
+  const supabase = createClient()
 
-  const [expenses, setExpenses] = useState<any[]>([])
+  const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [userPlan, setUserPlan] = useState('free')
+  
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
   const [selectedCardName, setSelectedCardName] = useState('')
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
@@ -48,8 +52,6 @@ export default function ExpensesPage() {
   const [kpiTotalYear, setKpiTotalYear] = useState(0)
   const [kpiMonthlyAverage, setKpiMonthlyAverage] = useState(0)
 
-  const supabase = createClient()
-  const router = useRouter()
   const menuRef = useRef<HTMLDivElement>(null)
 
   const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -64,8 +66,8 @@ export default function ExpensesPage() {
   }
 
   useEffect(() => {
-    function handleClickOutside(event: any) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setOpenMenuId(null)
       }
     }
@@ -74,11 +76,13 @@ export default function ExpensesPage() {
   }, [])
 
   useEffect(() => {
-    fetchData()
+    fetchData(true) // Carregamento inicial com Skeleton
   }, [selectedMonth, selectedYear])
 
-  async function fetchData() {
-    setLoading(true)
+  // CORREÇÃO: Parâmetro opcional `showLoading`
+  async function fetchData(showLoading = true) {
+    if (showLoading) setLoading(true)
+    
     setSelectedIds([])
     const { data: { user } } = await supabase.auth.getUser()
     
@@ -93,7 +97,7 @@ export default function ExpensesPage() {
     const { data: accounts } = await supabase.from('accounts').select('name, color').eq('user_id', user.id)
     const colorMap: Record<string, string> = {}
     if (accounts) {
-      accounts.forEach(acc => { colorMap[acc.name] = acc.color || '#3b82f6' })
+      (accounts as Account[]).forEach(acc => { colorMap[acc.name] = acc.color || '#3b82f6' })
     }
     setAccountsMap(colorMap)
 
@@ -112,10 +116,9 @@ export default function ExpensesPage() {
     }
     
     const { data: listData } = await listQuery.order('date', { ascending: true })
-    setExpenses(listData || [])
+    setExpenses((listData as Expense[]) || [])
 
     let kpiQuery = supabase.from('expenses').select('value, date').eq('user_id', user.id)
-
     if (selectedYear !== -1) {
         kpiQuery = kpiQuery.gte('date', `${selectedYear}-01-01`).lte('date', `${selectedYear}-12-31`)
     } 
@@ -135,11 +138,10 @@ export default function ExpensesPage() {
             const uniqueMonths = new Set(kpiData.map(d => d.date.substring(0, 7))).size
             divisor = uniqueMonths || 1
         }
-        
         setKpiMonthlyAverage(total / (divisor || 1))
     }
 
-    setLoading(false)
+    if (showLoading) setLoading(false)
   }
 
   const filteredExpenses = expenses.filter(expense => {
@@ -163,40 +165,52 @@ export default function ExpensesPage() {
 
   async function handleDeleteSelected() {
     if (selectedIds.length === 0) return
-    // Mantemos o confirm nativo pois é uma ação destrutiva importante
     if (!confirm(`Excluir ${selectedIds.length} itens?`)) return 
 
     const { error } = await supabase.from('expenses').delete().in('id', selectedIds)
     
     if (error) {
-      // 3. Substituir alert de erro
       addToast("Erro ao excluir: " + error.message, 'error')
     } else {
-      // 3. Substituir sucesso
       addToast(`${selectedIds.length} itens excluídos com sucesso`, 'success')
       setSelectedIds([])
-      fetchData()
+      fetchData(false) // Update sem loading
     }
   }
 
-  function handleCardClick(expense: any) {
+  function handleCardClick(expense: Expense) {
     if (!expense.is_credit_card) return
     if (userPlan === 'free') setShowUpgradeModal(true)
-    else { setSelectedCardId(expense.id); setSelectedCardName(expense.name) }
+    else { 
+      setSelectedCardId(expense.id)
+      setSelectedCardName(expense.name) 
+    }
   }
 
-  function handleToggleMenu(id: string) { if (openMenuId === id) setOpenMenuId(null); else setOpenMenuId(id) }
-  function handleStartEdit(expense: any) { setEditingId(expense.id); setEditValues({ date: expense.date.split('T')[0], value: expense.value.toString() }); setOpenMenuId(null) }
-  function handleCancelEdit() { setEditingId(null); setEditValues({ date: '', value: '' }) }
+  function handleToggleMenu(id: string) { 
+    setOpenMenuId(prev => prev === id ? null : id)
+  }
+
+  function handleStartEdit(expense: Expense) { 
+    setEditingId(expense.id)
+    setEditValues({ 
+      date: expense.date.split('T')[0], 
+      value: expense.value.toString() 
+    })
+    setOpenMenuId(null) 
+  }
 
   async function handleSaveEdit(id: string) {
-    const { error } = await supabase.from('expenses').update({ date: editValues.date, value: parseFloat(editValues.value) }).eq('id', id)
+    const { error } = await supabase
+      .from('expenses')
+      .update({ date: editValues.date, value: parseFloat(editValues.value) })
+      .eq('id', id)
+
     if (error) {
-      // 3. Substituir alert
       addToast("Erro ao atualizar: " + error.message, 'error')
     } else { 
       addToast("Lançamento atualizado!", 'success')
-      fetchData(); 
+      fetchData(false) // Update sem loading
       setEditingId(null) 
     }
   }
@@ -204,59 +218,102 @@ export default function ExpensesPage() {
   async function handleDelete(id: string) {
     if (!confirm('Tem certeza?')) return
     const { error } = await supabase.from('expenses').delete().eq('id', id)
-    if (error) {
-        addToast("Erro ao excluir", 'error')
-    } else {
+    if (error) addToast("Erro ao excluir", 'error')
+    else {
         addToast("Item excluído", 'success')
-        fetchData()
+        fetchData(false)
     }
   }
 
   async function handleToggleStatus(id: string, currentStatus: string) {
     const newStatus = currentStatus === 'pendente' ? 'pago' : 'pendente'
-    setExpenses(prev => prev.map(exp => exp.id === id ? { ...exp, status: newStatus } : exp))
+    
+    setExpenses(prev => prev.map(exp => exp.id === id ? { ...exp, status: newStatus as any } : exp))
     
     const { error } = await supabase.from('expenses').update({ status: newStatus }).eq('id', id)
-    if (error) addToast("Erro ao atualizar status", 'error')
-    else addToast(`Status alterado para ${newStatus}`, 'success')
+    if (error) {
+      addToast("Erro ao atualizar status", 'error')
+      fetchData(false)
+    } else {
+      addToast(`Status alterado para ${newStatus}`, 'success')
+    }
   }
 
-  async function handleSaveExpense(newExpenseData: any) {
+  async function handleSaveExpense(data: CreateExpenseDTO & { recurrence_months?: number }) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+
     try {
-      if (newExpenseData.type === 'variavel') {
-        await supabase.from('expenses').insert({ user_id: user.id, name: newExpenseData.name, value: newExpenseData.value, date: newExpenseData.date, type: 'variavel', status: 'pendente', is_credit_card: newExpenseData.is_credit_card })
+      if (data.type === 'variavel') {
+        await supabase.from('expenses').insert({ 
+          user_id: user.id, 
+          name: data.name, 
+          value: data.value, 
+          date: data.date, 
+          type: 'variavel', 
+          status: 'pendente', 
+          is_credit_card: data.is_credit_card 
+        })
       } else {
-        const { data: parentData } = await supabase.from('expenses').insert({ user_id: user.id, name: newExpenseData.name, value: newExpenseData.value, date: newExpenseData.date, type: 'fixa', status: 'pendente', recurrence_months: newExpenseData.recurrence_months, is_fixed_value: newExpenseData.is_fixed_value, is_credit_card: newExpenseData.is_credit_card }).select().single()
+        const { data: parentData, error } = await supabase.from('expenses').insert({ 
+          user_id: user.id, 
+          name: data.name, 
+          value: data.value, 
+          date: data.date, 
+          type: 'fixa', 
+          status: 'pendente', 
+          recurrence_months: data.recurrence_months, 
+          is_fixed_value: data.is_fixed_value, 
+          is_credit_card: data.is_credit_card 
+        }).select().single()
+
+        if(error) throw error
+
         const futureExpenses = []
-        for (let i = 1; i < (newExpenseData.recurrence_months || 1); i++) {
-          const d = new Date(newExpenseData.date); d.setDate(15); d.setMonth(d.getMonth() + i); const originalDay = new Date(newExpenseData.date).getDate(); const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); d.setDate(Math.min(originalDay, maxDay))
-          futureExpenses.push({ user_id: user.id, name: newExpenseData.name, value: newExpenseData.is_fixed_value ? newExpenseData.value : 0, date: d.toISOString(), type: 'fixa', status: 'pendente', parent_id: parentData.id, is_credit_card: newExpenseData.is_credit_card })
+        const months = data.recurrence_months || 1
+        
+        for (let i = 1; i < months; i++) {
+          const d = new Date(data.date)
+          d.setDate(15) 
+          d.setMonth(d.getMonth() + i)
+          
+          const originalDay = new Date(data.date).getDate()
+          const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+          d.setDate(Math.min(originalDay, maxDay))
+
+          futureExpenses.push({ 
+            user_id: user.id, 
+            name: data.name, 
+            value: data.is_fixed_value ? data.value : 0, 
+            date: d.toISOString(), 
+            type: 'fixa', 
+            status: 'pendente', 
+            parent_id: parentData.id, 
+            is_credit_card: data.is_credit_card 
+          })
         }
         if (futureExpenses.length > 0) await supabase.from('expenses').insert(futureExpenses)
       }
       
       addToast("Lançamento salvo com sucesso!", 'success')
-      fetchData() 
+      fetchData(false) 
     } catch (error: any) { 
       addToast('Erro ao salvar: ' + error.message, 'error') 
     }
   }
 
   if (loading) return (
-  <div className="min-h-screen p-8 pb-32">
-    <div className="mx-auto max-w-6xl">
-      <TableSkeleton />
+    <div className="min-h-screen p-8 pb-32">
+      <div className="mx-auto max-w-6xl">
+        <TableSkeleton />
+      </div>
     </div>
-  </div>
-)
+  )
 
   return (
     <div className="min-h-screen p-8 pb-32">
       <div className="mx-auto max-w-6xl space-y-8">
         
-        {/* HEADER DA PÁGINA */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Lançamentos</h1>
@@ -291,7 +348,7 @@ export default function ExpensesPage() {
                     <p className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">
                         {searchTerm ? 'Busca' : (selectedMonth === -1 ? `Total ${selectedYear === -1 ? 'Geral' : selectedYear}` : `Total em ${months[selectedMonth]}`)}
                     </p>
-                    <h3 className="text-2xl font-bold text-white tracking-tight">R$ {currentTableTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    <h3 className="text-2xl font-bold text-white tracking-tight">{formatCurrency(currentTableTotal)}</h3>
                 </div>
                 <div className={iconBadgeClass}><DollarSign size={18} /></div>
                 <div className="mt-auto">
@@ -306,7 +363,7 @@ export default function ExpensesPage() {
                     <p className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">
                         {selectedYear === -1 ? 'Acumulado Histórico' : `Acumulado ${selectedYear}`}
                     </p>
-                    <h3 className="text-2xl font-bold text-white tracking-tight">R$ {kpiTotalYear.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    <h3 className="text-2xl font-bold text-white tracking-tight">{formatCurrency(kpiTotalYear)}</h3>
                 </div>
                 <div className={iconBadgeClass}><TrendingDown size={18} /></div>
                 <div className="mt-auto">
@@ -319,7 +376,7 @@ export default function ExpensesPage() {
             <div className={cardClass}>
                 <div>
                     <p className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">Média Mensal</p>
-                    <h3 className="text-2xl font-bold text-white tracking-tight">R$ {kpiMonthlyAverage.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    <h3 className="text-2xl font-bold text-white tracking-tight">{formatCurrency(kpiMonthlyAverage)}</h3>
                 </div>
                 <div className="absolute top-5 right-5 w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 border border-white/10 text-blue-400">
                     <Wallet size={18} />
@@ -414,7 +471,7 @@ export default function ExpensesPage() {
                                             {editingId === expense.id ? (
                                                 <input type="date" value={editValues.date} onChange={(e) => setEditValues({...editValues, date: e.target.value})} className="bg-zinc-800 text-white border border-white/10 p-1 rounded w-full"/>
                                             ) : (
-                                                new Date(expense.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+                                                formatDate(expense.date)
                                             )}
                                         </td>
                                         
@@ -439,7 +496,7 @@ export default function ExpensesPage() {
                                             {editingId === expense.id ? (
                                                 <input type="number" step="0.01" value={editValues.value} onChange={(e) => setEditValues({...editValues, value: e.target.value})} className="w-20 bg-zinc-800 border border-white/10 p-1 rounded font-bold"/>
                                             ) : (
-                                                `R$ ${expense.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                                formatCurrency(expense.value)
                                             )}
                                         </td>
 
@@ -499,7 +556,7 @@ export default function ExpensesPage() {
           onClose={() => setSelectedCardId(null)}
           expenseId={selectedCardId || ''}
           expenseName={selectedCardName}
-          onUpdateTotal={fetchData} 
+          onUpdateTotal={() => fetchData(false)} // CORREÇÃO: Atualiza sem loading
         />
 
         <UpgradeModal 

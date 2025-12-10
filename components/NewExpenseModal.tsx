@@ -3,24 +3,25 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '../lib/supabase'
 import { X } from 'lucide-react'
+import { CreateExpenseDTO, Account, ExpenseType } from '../lib/types'
 
 interface NewExpenseModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (expense: any) => void
+  onSave: (expense: CreateExpenseDTO & { recurrence_months?: number }) => void
 }
 
 export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseModalProps) {
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState('')
-  const [type, setType] = useState('variavel') 
+  const [type, setType] = useState<ExpenseType>('variavel') 
   const [recurrence, setRecurrence] = useState('') 
   const [isFixedValue, setIsFixedValue] = useState(false)
   const [isCreditCard, setIsCreditCard] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  const [availableAccounts, setAvailableAccounts] = useState<any[]>([])
+  const [availableAccounts, setAvailableAccounts] = useState<Account[]>([])
   const supabase = createClient()
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const { data } = await supabase.from('accounts').select('*').eq('user_id', user.id).order('name')
-    setAvailableAccounts(data || [])
+    setAvailableAccounts((data as Account[]) || [])
   }
 
   function handleAccountChange(accountName: string) {
@@ -52,19 +53,24 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
 
     setIsLoading(true)
     
-    const newExpense = {
+    // Objeto tipado usando DTO
+    const newExpense: CreateExpenseDTO & { recurrence_months?: number } = {
       name,
       value: parseFloat(amount.replace(',', '.')),
       date,
       type, 
       status: 'pendente',
-      recurrence_months: type === 'fixa' ? parseInt(recurrence) : null,
-      is_fixed_value: type === 'fixa' ? isFixedValue : false,
-      is_credit_card: isCreditCard
+      is_credit_card: isCreditCard,
+      // Campos condicionais
+      ...(type === 'fixa' && {
+        recurrence_months: parseInt(recurrence),
+        is_fixed_value: isFixedValue
+      })
     }
 
     await onSave(newExpense)
     
+    // Resetar Form
     setName('')
     setAmount('')
     setDate('')

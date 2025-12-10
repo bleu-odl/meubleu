@@ -1,21 +1,43 @@
 'use client'
 
 import { createClient } from '../../lib/supabase'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, RefObject } from 'react' // Adicionado RefObject
 import { Search, Plus, MoreVertical, Edit2, Trash2, X, Check, CreditCard, Tag, GripVertical } from 'lucide-react'
-import { useToast } from '../../components/ToastContext' // 1. IMPORTAR
+import { useToast } from '../../components/ToastContext'
 
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
+// Tipos
+import { Account } from '../../lib/types'
+
 const COLORS = [ { hex: '#3b82f6', name: 'Azul' }, { hex: '#ef4444', name: 'Vermelho' }, { hex: '#22c55e', name: 'Verde' }, { hex: '#f59e0b', name: 'Laranja' }, { hex: '#a855f7', name: 'Roxo' }, { hex: '#ec4899', name: 'Rosa' }, { hex: '#6366f1', name: 'Indigo' }, { hex: '#6b7280', name: 'Cinza' } ]
 
-function SortableAccountItem({ account, index, total, openEditModal, handleDelete, openMenuId, setOpenMenuId, menuRef }: any) {
+// Interface corrigida: removido "React." e usado "RefObject" direto
+interface SortableItemProps {
+  account: Account
+  index: number
+  total: number
+  openEditModal: (acc: Account) => void
+  handleDelete: (id: string) => void
+  openMenuId: string | null
+  setOpenMenuId: (id: string | null) => void
+  menuRef: RefObject<HTMLDivElement | null> 
+}
+
+function SortableAccountItem({ account, index, total, openEditModal, handleDelete, openMenuId, setOpenMenuId, menuRef }: SortableItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: account.id })
   const isOpen = openMenuId === account.id
   const isLastItems = index >= total - 2
-  const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : (isOpen ? 50 : 1), opacity: isDragging ? 0.5 : 1, position: 'relative' as const }
+  
+  const style = { 
+    transform: CSS.Transform.toString(transform), 
+    transition, 
+    zIndex: isDragging ? 10 : (isOpen ? 50 : 1), 
+    opacity: isDragging ? 0.5 : 1, 
+    position: 'relative' as const 
+  }
 
   return (
     <li ref={setNodeRef} style={style} className="p-4 flex justify-between items-center hover:bg-white/5 group transition-colors bg-zinc-900 border-b border-white/5 last:border-0 first:rounded-t-xl last:rounded-b-xl">
@@ -33,27 +55,62 @@ function SortableAccountItem({ account, index, total, openEditModal, handleDelet
 }
 
 export default function AccountsPage() {
-  const { addToast } = useToast() // 2. INICIAR HOOK
+  const { addToast } = useToast()
 
-  const [accounts, setAccounts] = useState<any[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingAccount, setEditingAccount] = useState<any>(null)
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null)
   const [formData, setFormData] = useState({ name: '', is_credit_card: false, color: COLORS[0].hex })
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  
   const menuRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
 
   useEffect(() => { fetchAccounts() }, [])
-  useEffect(() => { function h(e: any) { if (menuRef.current && !menuRef.current.contains(e.target)) setOpenMenuId(null) }; document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h) }, [])
+  
+  useEffect(() => { 
+    function h(e: MouseEvent) { 
+        // Conversão de tipo segura para Node
+        if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpenMenuId(null) 
+    }
+    document.addEventListener("mousedown", h)
+    return () => document.removeEventListener("mousedown", h) 
+  }, [])
 
-  async function fetchAccounts() { setLoading(true); const { data: { user } } = await supabase.auth.getUser(); if (!user) return; const { data } = await supabase.from('accounts').select('*').eq('user_id', user.id).order('order_index', { ascending: true }).order('name', { ascending: true }); setAccounts(data || []); setLoading(false) }
-  async function handleDragEnd(event: DragEndEvent) { const { active, over } = event; if (active.id !== over?.id) { setAccounts((items) => { const oldIndex = items.findIndex((item) => item.id === active.id); const newIndex = items.findIndex((item) => item.id === over?.id); const newOrder = arrayMove(items, oldIndex, newIndex); saveOrderToSupabase(newOrder); return newOrder }) } }
-  async function saveOrderToSupabase(updatedAccounts: any[]) { const { data: { user } } = await supabase.auth.getUser(); if (!user) return; const updates = updatedAccounts.map((acc, index) => ({ id: acc.id, user_id: user.id, name: acc.name, is_credit_card: acc.is_credit_card, color: acc.color, order_index: index })); await supabase.from('accounts').upsert(updates) }
+  async function fetchAccounts() { 
+    setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase.from('accounts').select('*').eq('user_id', user.id).order('order_index', { ascending: true }).order('name', { ascending: true })
+    setAccounts((data as Account[]) || [])
+    setLoading(false) 
+  }
+
+  async function handleDragEnd(event: DragEndEvent) { 
+    const { active, over } = event
+    if (over && active.id !== over.id) { 
+        setAccounts((items) => { 
+            const oldIndex = items.findIndex((item) => item.id === active.id)
+            const newIndex = items.findIndex((item) => item.id === over.id)
+            const newOrder = arrayMove(items, oldIndex, newIndex)
+            saveOrderToSupabase(newOrder)
+            return newOrder 
+        }) 
+    } 
+  }
+
+  async function saveOrderToSupabase(updatedAccounts: Account[]) { 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const updates = updatedAccounts.map((acc, index) => ({ id: acc.id, user_id: user.id, name: acc.name, is_credit_card: acc.is_credit_card, color: acc.color, order_index: index }))
+    await supabase.from('accounts').upsert(updates) 
+  }
+
   function openNewModal() { setEditingAccount(null); setFormData({ name: '', is_credit_card: false, color: COLORS[0].hex }); setIsModalOpen(true) }
-  function openEditModal(account: any) { setEditingAccount(account); setFormData({ name: account.name, is_credit_card: account.is_credit_card, color: account.color || COLORS[0].hex }); setOpenMenuId(null); setIsModalOpen(true) }
+  function openEditModal(account: Account) { setEditingAccount(account); setFormData({ name: account.name, is_credit_card: account.is_credit_card, color: account.color || COLORS[0].hex }); setOpenMenuId(null); setIsModalOpen(true) }
   
   async function handleSave(e: React.FormEvent) { 
     e.preventDefault()
