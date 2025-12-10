@@ -26,7 +26,6 @@ interface CreditCardModalProps {
 }
 
 export default function CreditCardModal({ isOpen, onClose, expenseId, expenseName, onUpdateTotal }: CreditCardModalProps) {
-  // Tipagem forte para itens da fatura
   const [items, setItems] = useState<CardTransaction[]>([])
   
   const [desc, setDesc] = useState('')
@@ -74,8 +73,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
       setItems(data as CardTransaction[])
       const sum = data.reduce((acc, curr) => acc + curr.amount, 0)
       setTotal(sum)
-      // Atualiza o valor total da despesa pai
-      await supabase.from('expenses').update({ value: sum }).eq('id', expenseId)
+      // Atualiza o valor total da despesa pai apenas para garantir a sinc do front
       onUpdateTotal()
     }
     setLoading(false)
@@ -85,101 +83,27 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
     e.preventDefault()
     if (!desc || !amount || !date) return
 
-    const inputVal = parseFloat(amount.replace(',', '.'))
-    const numInstallments = isInstallment ? parseInt(installments) : 1
-    const baseValue = Math.floor((inputVal / numInstallments) * 100) / 100
-    const totalBase = baseValue * numInstallments
-    const remainder = Number((inputVal - totalBase).toFixed(2))
-
     const { data: { user } } = await supabase.auth.getUser()
     if(!user) return
 
     setLoading(true)
 
     try {
-        const { data: currentInvoiceData, error: fetchError } = await supabase
-            .from('expenses')
-            .select('date, value')
-            .eq('id', expenseId)
-            .single()
-        
-        if (fetchError || !currentInvoiceData) throw new Error("Fatura atual não encontrada.")
+        const inputVal = parseFloat(amount.replace(',', '.'))
+        const numInstallments = isInstallment ? parseInt(installments) : 1
 
-        const baseInvoiceDate = new Date(currentInvoiceData.date)
+        // Chamada única para a Procedure no banco (MUITO mais seguro e rápido)
+        const { error } = await supabase.rpc('create_card_transaction_installments', {
+            p_user_id: user.id,
+            p_card_name: expenseName,
+            p_description: desc,
+            p_amount: inputVal,
+            p_date: date,
+            p_category: category,
+            p_installments: numInstallments
+        })
 
-        for (let i = 0; i < numInstallments; i++) {
-            const transactionDate = new Date(date)
-            transactionDate.setMonth(transactionDate.getMonth() + i)
-            const maxDayTrans = new Date(transactionDate.getFullYear(), transactionDate.getMonth() + 1, 0).getDate()
-            transactionDate.setDate(Math.min(new Date(date).getDate(), maxDayTrans))
-
-            let finalInstallmentValue = baseValue
-            if (i === 0) {
-                finalInstallmentValue = Number((baseValue + remainder).toFixed(2))
-            }
-
-            let targetExpenseId = ''
-            let currentExpenseValue = 0
-
-            if (i === 0) {
-                targetExpenseId = expenseId
-                currentExpenseValue = currentInvoiceData.value
-            } else {
-                const targetInvoiceDate = new Date(baseInvoiceDate)
-                targetInvoiceDate.setMonth(baseInvoiceDate.getMonth() + i)
-
-                const startOfMonth = new Date(targetInvoiceDate.getFullYear(), targetInvoiceDate.getMonth(), 1).toISOString()
-                const endOfMonth = new Date(targetInvoiceDate.getFullYear(), targetInvoiceDate.getMonth() + 1, 0).toISOString()
-
-                const { data: existingExpense } = await supabase
-                    .from('expenses')
-                    .select('id, value')
-                    .eq('user_id', user.id)
-                    .eq('name', expenseName) 
-                    .gte('date', startOfMonth)
-                    .lte('date', endOfMonth)
-                    .maybeSingle()
-
-                if (existingExpense) {
-                    targetExpenseId = existingExpense.id
-                    currentExpenseValue = existingExpense.value
-                } else {
-                    const { data: newExpense, error: createError } = await supabase
-                        .from('expenses')
-                        .insert({
-                            user_id: user.id,
-                            name: expenseName,
-                            value: 0,
-                            date: targetInvoiceDate.toISOString(),
-                            type: 'variavel', 
-                            status: 'pendente',
-                            is_credit_card: true
-                        })
-                        .select()
-                        .single()
-                    
-                    if (createError) throw createError
-                    targetExpenseId = newExpense.id
-                    currentExpenseValue = 0
-                }
-            }
-
-            const itemDesc = isInstallment ? `${desc} (${i + 1}/${numInstallments})` : desc
-            
-            const { error: transError } = await supabase.from('card_transactions').insert({
-                expense_id: targetExpenseId,
-                description: itemDesc,
-                amount: finalInstallmentValue,
-                category,
-                created_at: transactionDate.toISOString()
-            })
-
-            if (transError) throw transError
-
-            await supabase.from('expenses')
-                .update({ value: currentExpenseValue + finalInstallmentValue })
-                .eq('id', targetExpenseId)
-        }
+        if (error) throw error
 
         setDesc('')
         setAmount('')
@@ -188,7 +112,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
         fetchItems() 
 
     } catch (error: any) {
-        alert('Erro: ' + error.message)
+        alert('Erro ao processar: ' + error.message)
     } finally {
         setLoading(false)
     }
@@ -216,7 +140,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
     }).eq('id', id)
 
     if (error) { alert("Erro: " + error.message) } else {
-      // Recalcular total da despesa
+      // Recalcular total da despesa localmente
       const { data: allItems } = await supabase.from('card_transactions').select('amount').eq('expense_id', expenseId)
       if (allItems) {
         const newTotal = allItems.reduce((acc, curr) => acc + curr.amount, 0)
@@ -232,8 +156,15 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
   async function handleDeleteItem(id: string) {
     if (!confirm("Remover este gasto?")) return
     const { error } = await supabase.from('card_transactions').delete().eq('id', id)
+    
     if (!error) {
-      fetchItems() 
+       // Após deletar, precisamos atualizar o total da fatura
+       const { data: allItems } = await supabase.from('card_transactions').select('amount').eq('expense_id', expenseId)
+       const newTotal = allItems ? allItems.reduce((acc, curr) => acc + curr.amount, 0) : 0
+       await supabase.from('expenses').update({ value: newTotal }).eq('id', expenseId)
+       setTotal(newTotal)
+       onUpdateTotal()
+       fetchItems() 
     }
   }
 
