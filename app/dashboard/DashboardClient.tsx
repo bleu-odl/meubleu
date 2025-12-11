@@ -1,5 +1,7 @@
 'use client'
 
+import AIFlashTips from "@/components/AIFlashTips";
+import AIInsightsCard from "@/components/AIInsightsCard";
 import { useRouter } from 'next/navigation'
 import { 
   BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, CartesianGrid, 
@@ -127,6 +129,43 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
             </div>
           </div>
         </div>
+
+        // ... imports existentes ...
+// ADICIONE ESTES DOIS IMPORTS:
+import AIFlashTips from '../../components/AIFlashTips'
+import AIInsightsCard from '../../components/AIInsightsCard'
+
+// ... dentro do componente DashboardClient:
+
+return (
+  <div className="space-y-8 animate-in fade-in duration-500">
+      
+      {/* HEADER existente... */}
+      {/* ... */}
+
+      {/* --- 1. ÁREA DE INSIGHTS FIXOS (NOVO) --- */}
+      <AIFlashTips userPlan={userProfile.plan} />
+
+      {/* KPI CARDS existentes... */}
+      {/* ... */}
+
+      {/* GRÁFICO PRINCIPAL existente... */}
+      {/* ... */}
+
+      {/* CATEGORIAS E EVOLUÇÃO existentes... */}
+      {/* ... */}
+
+      {/* CARTÃO DE CRÉDITO existente... */}
+      {/* ... */}
+
+      {/* --- 2. ÁREA DO CONSULTOR IA (NOVO) --- */}
+      <div className="grid grid-cols-1">
+          <AIInsightsCard userPlan={userProfile.plan} />
+      </div>
+
+      <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
+  </div>
+)
 
         <div className="flex items-center gap-6">
           {/* ----- RESTAURADO: TOOLTIP DO SCORE ----- */}
