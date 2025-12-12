@@ -1,7 +1,7 @@
 'use client'
 
-import AIFlashTips from "@/components/AIFlashTips";
-import AIInsightsCard from "@/components/AIInsightsCard";
+import AIFlashTips from '../../components/AIFlashTips'
+import AIInsightsCard from '../../components/AIInsightsCard'
 import { useRouter } from 'next/navigation'
 import { 
   BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, CartesianGrid, 
@@ -9,7 +9,7 @@ import {
 } from 'recharts'
 import { 
   TrendingUp, TrendingDown, DollarSign, CalendarClock, Wallet, 
-  AlertTriangle, CreditCard, 
+  AlertTriangle, 
   ChevronDown, ChevronUp, Lightbulb, Activity, Lock 
 } from 'lucide-react'
 import { formatCurrency } from '../../lib/utils'
@@ -130,52 +130,14 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
           </div>
         </div>
 
-        // ... imports existentes ...
-// ADICIONE ESTES DOIS IMPORTS:
-import AIFlashTips from '../../components/AIFlashTips'
-import AIInsightsCard from '../../components/AIInsightsCard'
-
-// ... dentro do componente DashboardClient:
-
-return (
-  <div className="space-y-8 animate-in fade-in duration-500">
-      
-      {/* HEADER existente... */}
-      {/* ... */}
-
-      {/* --- 1. ÁREA DE INSIGHTS FIXOS (NOVO) --- */}
-      <AIFlashTips userPlan={userProfile.plan} />
-
-      {/* KPI CARDS existentes... */}
-      {/* ... */}
-
-      {/* GRÁFICO PRINCIPAL existente... */}
-      {/* ... */}
-
-      {/* CATEGORIAS E EVOLUÇÃO existentes... */}
-      {/* ... */}
-
-      {/* CARTÃO DE CRÉDITO existente... */}
-      {/* ... */}
-
-      {/* --- 2. ÁREA DO CONSULTOR IA (NOVO) --- */}
-      <div className="grid grid-cols-1">
-          <AIInsightsCard userPlan={userProfile.plan} />
-      </div>
-
-      <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
-  </div>
-)
-
         <div className="flex items-center gap-6">
-          {/* ----- RESTAURADO: TOOLTIP DO SCORE ----- */}
+          {/* TOOLTIP DO SCORE */}
           <div className="relative group cursor-help text-right">
               <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 block mb-1">Score</span>
               <div className={`text-3xl font-bold ${scoreTextColor} leading-none flex items-center justify-end gap-2`}>
                   <Activity size={20} className="opacity-50" /> {data.healthScore}
               </div>
               
-              {/* O Tooltip flutuante que faltava */}
               <div className="absolute top-full right-0 mt-3 w-64 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl p-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 pointer-events-none text-left">
                   <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-bold text-zinc-400 uppercase">Saúde Financeira</span>
@@ -187,7 +149,6 @@ return (
                   <p className="text-xs text-zinc-300 leading-relaxed">{scoreDesc}</p>
               </div>
           </div>
-          {/* -------------------------------------- */}
 
           <div className="flex items-center bg-zinc-900/50 border border-white/5 rounded-lg p-1">
              <div className="relative">
@@ -204,6 +165,9 @@ return (
           </div>
         </div>
       </div>
+
+      {/* --- 1. ÁREA DE INSIGHTS FIXOS --- */}
+      <AIFlashTips userPlan={userProfile.plan} />
 
       {/* KPI CARDS */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -326,6 +290,11 @@ return (
               </div>
             </div>
         </div>
+      </div>
+
+      {/* --- 2. ÁREA DO CONSULTOR IA --- */}
+      <div className="grid grid-cols-1">
+          <AIInsightsCard userPlan={userProfile.plan} />
       </div>
 
       <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />

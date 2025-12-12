@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { Sparkles, Lock, Bot } from 'lucide-react'
-import { useCompletion } from 'ai'
-import ReactMarkdown from 'react-markdown' // Se der erro, remova e use <p>{completion}</p>
+// CORREÇÃO: Importando do pacote correto para Vercel AI SDK v5+
+import { useCompletion } from '@ai-sdk/react' 
+import ReactMarkdown from 'react-markdown'
 
 interface AIInsightsCardProps {
   userPlan: string
@@ -13,7 +14,7 @@ export default function AIInsightsCard({ userPlan }: AIInsightsCardProps) {
   const isPremium = userPlan === 'premium'
   const [hasStarted, setHasStarted] = useState(false)
 
-  // Conecta com a API que criamos no Passo 1
+  // O endpoint da API continua o mesmo
   const { completion, complete, isLoading } = useCompletion({
     api: '/api/chat-insights',
   })
