@@ -2,9 +2,6 @@ import { createClient } from '../../lib/supabase-server'
 import { redirect } from 'next/navigation'
 import DashboardClient from './DashboardClient'
 
-// Utilitários de data
-const shortMonthNames = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
-
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ month?: string, year?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
@@ -17,35 +14,40 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const selectedMonth = params.month ? parseInt(params.month) : today.getMonth()
   const selectedYear = params.year ? parseInt(params.year) : today.getFullYear()
 
-  // Intervalos
+  // Intervalos do Mês Selecionado
   const startCurrentDate = new Date(selectedYear, selectedMonth, 1).toISOString()
   const endCurrentDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999).toISOString()
   
   const startLastDate = new Date(selectedYear, selectedMonth - 1, 1).toISOString()
   const endLastDate = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999).toISOString()
   
-  const date12MonthsAgo = new Date(selectedYear, selectedMonth - 11, 1).toISOString()
-
-  // 2. Buscas Paralelas
+  // 2. Buscas Otimizadas
   const [
     userData,
     { data: currentExpenses },
     { data: lastExpenses },
     { data: currentIncomes },
-    { data: yearExpenses },
-    { data: yearIncomes },
+    // AQUI: Trocamos o download de tudo pelo RPC leve
+    { data: yearlyBalances }, 
+    { data: accountNamesData },
     { data: nextExpenseData }
   ] = await Promise.all([
     supabase.from('users').select('plano, full_name, username').eq('id', user.id).single(),
+    // Dados do Mês Atual (necessários para os Cards)
     supabase.from('expenses').select('id, value, date, name, is_credit_card').eq('user_id', user.id).gte('date', startCurrentDate).lte('date', endCurrentDate),
     supabase.from('expenses').select('value').eq('user_id', user.id).gte('date', startLastDate).lte('date', endLastDate),
     supabase.from('incomes').select('amount').eq('user_id', user.id).gte('date', startCurrentDate).lte('date', endCurrentDate),
-    supabase.from('expenses').select('value, date, name').eq('user_id', user.id).gte('date', date12MonthsAgo).order('date', { ascending: true }),
-    supabase.from('incomes').select('amount, date').eq('user_id', user.id).gte('date', date12MonthsAgo),
+    
+    // RPC: Agregação no banco de dados
+    supabase.rpc('get_monthly_balances', { year_input: selectedYear }),
+
+    // Apenas os nomes das contas (para o dropdown), distinct
+    supabase.from('accounts').select('name').eq('user_id', user.id).order('name'),
+
     supabase.from('expenses').select('name, date, value').eq('user_id', user.id).eq('status', 'pendente').gte('date', new Date().toISOString().split('T')[0]).order('date', { ascending: true }).limit(1).single()
   ])
 
-  // 3. Processamento de Dados
+  // 3. Processamento de Dados (Agora muito mais leve)
   const sumCurrent = currentExpenses?.reduce((acc, curr) => acc + curr.value, 0) || 0
   const sumLast = lastExpenses?.reduce((acc, curr) => acc + curr.value, 0) || 0
   const totalIncome = currentIncomes?.reduce((acc, curr) => acc + curr.amount, 0) || 0
@@ -56,6 +58,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     ? currentExpenses.reduce((prev, current) => (prev.value > current.value) ? prev : current)
     : null
 
+  // Health Score Logic (Mantida igual)
   let healthScore = 50
   if (totalIncome > 0) {
     if (sumCurrent > totalIncome) healthScore = Math.max(0, 50 - ((sumCurrent / totalIncome - 1) * 50))
@@ -63,20 +66,16 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   } else if (sumCurrent === 0) healthScore = 50
   healthScore = Math.round(healthScore)
 
-  // Gráfico Fluxo de Caixa (Anual)
-  const monthlyDataMap = new Map()
-  for (let i = 0; i < 12; i++) {
-      const d = new Date(selectedYear, selectedMonth - 11 + i, 1)
-      const key = `${d.getFullYear()}-${d.getMonth()}`
-      monthlyDataMap.set(key, { name: shortMonthNames[d.getMonth()], expense: 0, income: 0 })
-  }
-  const getCompetenceKey = (dateStr: string) => { const d = new Date(dateStr); return `${d.getFullYear()}-${d.getMonth()}` }
+  // Formatação dos dados do gráfico principal vindo do RPC
+  const shortMonthNames = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
   
-  yearExpenses?.forEach(exp => { const key = getCompetenceKey(exp.date); if(monthlyDataMap.has(key)) monthlyDataMap.get(key).expense += exp.value })
-  yearIncomes?.forEach(inc => { const key = getCompetenceKey(inc.date); if(monthlyDataMap.has(key)) monthlyDataMap.get(key).income += inc.amount })
-  const chartData = Array.from(monthlyDataMap.values())
+  const chartData = yearlyBalances?.map((item: any) => ({
+    name: shortMonthNames[item.month - 1], // Ajuste pois SQL retorna 1-12
+    income: item.total_income,
+    expense: item.total_expense
+  })) || []
 
-  // Top Categorias
+  // Top Categorias do Mês (Client-side aggregation só do mês atual é ok)
   const catMap = new Map()
   currentExpenses?.forEach(exp => { catMap.set(exp.name, (catMap.get(exp.name) || 0) + exp.value) })
   const topCategories = Array.from(catMap.entries())
@@ -95,8 +94,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const ccCategoryData = Array.from(ccCatMap.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => (b.value as number) - (a.value as number))
   const ccTotal = ccTransactions.reduce((acc, curr) => acc + curr.amount, 0)
 
-  // Nomes das contas para o filtro
-  const accountNames = Array.from(new Set(yearExpenses?.map(item => item.name))).sort()
+  const accountNames = accountNamesData ? accountNamesData.map(a => a.name) : []
 
   const dashboardData = {
     currentMonthTotal: sumCurrent,
@@ -105,14 +103,13 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     nextDue: nextExpenseData,
     totalIncome,
     healthScore,
-    chartData,
+    chartData, // Agora vem pronto do DB
     topCategories,
     ccCategoryData,
     ccTotal,
     ccTransactions,
     accountNames,
-    // ADICIONADO: Enviamos os dados brutos do ano para o client poder filtrar
-    rawYearExpenses: yearExpenses || [] 
+    // REMOVIDO: rawYearExpenses (Não enviamos mais dados brutos)
   }
 
   let displayName = 'Usuário'

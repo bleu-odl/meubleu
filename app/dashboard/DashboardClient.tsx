@@ -4,19 +4,19 @@ import AIFlashTips from '../../components/AIFlashTips'
 import { useRouter } from 'next/navigation'
 import { 
   BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, CartesianGrid, 
-  LineChart, Line, YAxis, Legend, Cell, ReferenceLine 
+  LineChart, Line, YAxis, Legend, Cell 
 } from 'recharts'
 import { 
   TrendingUp, TrendingDown, DollarSign, CalendarClock, Wallet, 
-  AlertTriangle, ChevronDown, ChevronUp, Lightbulb, Activity, Lock, 
-  CreditCard, PieChart, ArrowLeft, Target, Zap, ChevronRight 
+  AlertTriangle, ChevronDown, Lightbulb, Activity, Lock, 
+  PieChart, ArrowLeft, Target, Zap, ChevronRight 
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '../../lib/utils'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useTransition } from 'react'
 import UpgradeModal from '../../components/UpgradeModal'
+import { getAccountYearlyData } from '../actions/dashboard-data' // <--- Importando a Server Action
 
 const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
-const shortMonthNames = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 const years = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i)
 const categoryColors: Record<string, string> = { 'Alimentação': '#F97316', 'Transporte': '#3B82F6', 'Lazer': '#A855F7', 'Mercado': '#22C55E', 'Serviços': '#6B7280', 'Compras': '#EC4899', 'Saúde': '#EF4444', 'Outros': '#94A3B8' }
 const colors = { red: '#f43f5e', green: '#10b981', yellow: '#f59e0b', indigo: '#6366f1', slate: '#3f3f46' }
@@ -37,7 +37,7 @@ interface DashboardProps {
     ccTotal: number
     ccTransactions: any[]
     accountNames: string[]
-    rawYearExpenses: any[]
+    // Removido rawYearExpenses
   }
   userProfile: { name: string, plan: string }
   selectedMonth: number
@@ -51,71 +51,47 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
   const [chartFilter, setChartFilter] = useState('all')
   const [selectedAccount, setSelectedAccount] = useState(data.accountNames[0] || '')
   const [specificChartData, setSpecificChartData] = useState<any[]>([])
+  const [isPending, startTransition] = useTransition() // Para loading suave
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   
-  // --- ESTADO NOVO: Controle da Navegação na Seção de Fatura ---
   const [selectedCcCategory, setSelectedCcCategory] = useState<string | null>(null)
 
   const currentBalance = data.totalIncome - data.currentMonthTotal
   const isSpendingMore = data.percentageChange > 0
-
-  // Mock de limite (substituir por dado real do backend futuramente)
   const mockCreditLimit = 5000; 
-  
-  // Cálculos para o Painel Inteligente da Fatura
-  const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate()
-  const today = new Date()
-  const isCurrentMonth = today.getMonth() === selectedMonth && today.getFullYear() === selectedYear
-  const dayCount = isCurrentMonth ? today.getDate() : daysInMonth // Se mês passou, usa total de dias
-  const dailyAvg = data.ccTotal / (dayCount || 1)
-  const projection = isCurrentMonth ? dailyAvg * daysInMonth : data.ccTotal
 
-  // Efeito para calcular o gráfico específico quando a conta selecionada muda
+  // --- NOVA LÓGICA: Buscar dados da conta específica via Server Action ---
   useEffect(() => {
-    if (selectedAccount && data.rawYearExpenses.length > 0) {
-      processSpecificChart(selectedAccount, data.rawYearExpenses)
+    if (selectedAccount) {
+      startTransition(async () => {
+        // Chama o servidor para pegar apenas os dados necessários
+        const chartData = await getAccountYearlyData(selectedYear, selectedAccount)
+        setSpecificChartData(chartData)
+      })
     }
-  }, [selectedAccount, data.rawYearExpenses])
-
-  function processSpecificChart(accountName: string, allExpenses: any[]) {
-    const tempMap = new Map()
-     for (let i = 0; i < 12; i++) {
-        const d = new Date(selectedYear, selectedMonth - 11 + i, 1)
-        tempMap.set(`${d.getFullYear()}-${d.getMonth()}`, { name: shortMonthNames[d.getMonth()], value: 0 })
-     }
-     
-     const getCompetenceKey = (dateStr: string) => {
-        const d = new Date(dateStr)
-        return `${d.getFullYear()}-${d.getMonth()}`
-    }
-
-     allExpenses.filter(e => e.name === accountName).forEach(exp => {
-        const key = getCompetenceKey(exp.date)
-        if (tempMap.has(key)) { 
-            const c = tempMap.get(key); 
-            c.value += exp.value; 
-            tempMap.set(key, c) 
-        }
-     })
-     setSpecificChartData(Array.from(tempMap.values()))
-  }
+  }, [selectedAccount, selectedYear])
 
   function handleFilterChange(month: number, year: number) {
     router.push(`/dashboard?month=${month}&year=${year}`)
   }
 
-  // Helper para agrupar transações na visão detalhada da fatura
   const getGroupedTransactions = (category: string) => {
     const rawList = data.ccTransactions.filter(t => t.category === category)
-    // Ordena por data (mais recente primeiro)
     return rawList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }
 
-  // Texto do Insight Dinâmico (Lógica Reativa)
+  // Cálculos do Painel Fatura
+  const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate()
+  const today = new Date()
+  const isCurrentMonth = today.getMonth() === selectedMonth && today.getFullYear() === selectedYear
+  const dayCount = isCurrentMonth ? today.getDate() : daysInMonth
+  const dailyAvg = data.ccTotal / (dayCount || 1)
+  const projection = isCurrentMonth ? dailyAvg * daysInMonth : data.ccTotal
+
   const dynamicInsightText = useMemo(() => {
     if (selectedCcCategory) {
        const catVal = data.ccCategoryData.find(c => c.name === selectedCcCategory)?.value || 0
-       const percent = ((catVal / data.ccTotal) * 100).toFixed(1)
+       const percent = data.ccTotal > 0 ? ((catVal / data.ccTotal) * 100).toFixed(1) : '0'
        return `Você gastou ${formatCurrency(catVal)} em ${selectedCcCategory}. Isso representa ${percent}% da sua fatura.`
     }
     if (projection > mockCreditLimit) return `Atenção: A projeção (${formatCurrency(projection)}) indica risco de estourar o limite de ${formatCurrency(mockCreditLimit)}.`
@@ -123,7 +99,6 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
     return "Seus gastos parecem controlados. Nenhuma anomalia crítica detectada nesta fatura."
   }, [selectedCcCategory, projection, dailyAvg, data.ccTotal, data.ccCategoryData, mockCreditLimit, isCurrentMonth])
 
-  // Lógica visual do Score
   let scoreTextColor = 'text-red-400', scoreLabel = 'Crítico', scoreDesc = 'Seus gastos estão excedendo sua renda.'
   if (data.healthScore >= 80) { scoreTextColor = 'text-indigo-400'; scoreLabel = 'Excelente'; scoreDesc = 'Parabéns! Você está poupando muito.' }
   else if (data.healthScore >= 50) { scoreTextColor = 'text-yellow-400'; scoreLabel = 'Atenção'; scoreDesc = 'Você está no limite.' }
@@ -180,7 +155,7 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
         </div>
       </div>
 
-      {/* KPI CARDS */}
+      {/* KPI CARDS (Mantidos iguais) */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className={cardClass}>
           <div className="space-y-1"><p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Gastos do mês</p><h3 className="text-2xl font-bold text-white tracking-tight">{formatCurrency(data.currentMonthTotal)}</h3></div>
@@ -205,7 +180,7 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
       {/* GRÁFICO PRINCIPAL */}
       <div className="card h-[400px]">
           <div className="mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div><h3 className="text-base font-semibold text-white">Fluxo de Caixa</h3><p className="text-xs text-zinc-500">Receitas vs Despesas (12 meses)</p></div>
+              <div><h3 className="text-base font-semibold text-white">Fluxo de Caixa</h3><p className="text-xs text-zinc-500">Receitas vs Despesas ({selectedYear})</p></div>
               <div className="bg-zinc-900 border border-white/5 p-0.5 rounded-lg flex">
                   {[{ key: 'all', label: 'Tudo' }, { key: 'income', label: 'Receitas' }, { key: 'expense', label: 'Despesas' }].map((filter) => (
                       <button key={filter.key} onClick={() => setChartFilter(filter.key)} className={`px-3 py-1 text-[11px] font-medium rounded-md transition-all duration-200 ${chartFilter === filter.key ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'}`}>{filter.label}</button>
@@ -227,7 +202,6 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
           </div>
       </div>
 
-      {/* ÁREA DE INSIGHTS FIXOS (Abaixo do gráfico) */}
       <AIFlashTips userPlan={userProfile.plan} />
 
       {/* CATEGORIAS E EVOLUÇÃO */}
@@ -246,6 +220,7 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
             </div>
           </div>
           
+          {/* GRÁFICO DINÂMICO POR CONTA */}
           <div className="card rounded-2xl">
             <div className="mb-6 flex items-center justify-between">
               <div><h3 className="text-base font-semibold text-white">Evolução por Categoria</h3><p className="text-xs text-zinc-500">Histórico anual</p></div>
@@ -253,7 +228,14 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
                 {data.accountNames.map(name => (<option key={name} value={name}>{name}</option>))}
               </select>
             </div>
-            <div className="h-[250px] w-full">
+            <div className="h-[250px] w-full relative">
+              {/* Overlay de Loading */}
+              {isPending && (
+                  <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] z-10 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-indigo-500"></div>
+                  </div>
+              )}
+              
               {specificChartData.length > 0 && selectedAccount ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={specificChartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
@@ -271,14 +253,10 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
           </div>
       </div>
 
-      {/* --- FATURA ABERTA (Painel de Decisão) --- */}
-      {/* Esta seção foi reescrita conforme sua especificação: Layout Flex Dividido */}
+      {/* PAINEL DE FATURA (Mantido igual, apenas props atualizadas) */}
       <div className="card rounded-2xl relative overflow-hidden flex flex-col md:flex-row min-h-[420px]">
-        
-        {/* Bloqueio Premium (Opcional - pode ser removido se não quiser) */}
         {userProfile.plan === 'free' && <div className="absolute inset-0 bg-zinc-950/90 backdrop-blur-sm z-30 flex flex-col items-center justify-center text-center p-6"><div className="bg-zinc-800 p-3 rounded-full mb-3"><Lock className="text-yellow-400" size={20} /></div><h3 className="text-base font-bold text-white">Painel de Fatura Pro</h3><p className="text-xs text-zinc-400 mb-4 max-w-xs">Desbloqueie análises de projeção, impacto por categoria e micro-insights.</p><button onClick={() => setShowUpgradeModal(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-full text-xs font-bold transition-all active:scale-95 shadow-lg shadow-indigo-900/20">Desbloquear Premium</button></div>}
 
-        {/* --- COLUNA ESQUERDA: PAINEL ANALÍTICO --- */}
         <div className="w-full md:w-[40%] bg-zinc-900/30 border-b md:border-b-0 md:border-r border-white/5 p-6 flex flex-col relative">
            <div className="mb-4">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -287,7 +265,7 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
               </h3>
               <p className="text-[11px] text-zinc-500 mt-1 ml-10">Análise de impacto e projeção</p>
            </div>
-
+           
            {/* Gráfico Analítico */}
            <div className="h-[160px] w-full mb-4">
              {data.ccCategoryData.length > 0 ? (
@@ -304,7 +282,6 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
              ) : <div className="h-full flex items-center justify-center text-xs text-zinc-600">Sem dados.</div>}
            </div>
 
-           {/* Grid de KPIs Inteligentes */}
            <div className="grid grid-cols-2 gap-2 mb-4">
               <div className="bg-zinc-950/50 p-2.5 rounded-xl border border-white/5">
                  <span className="text-[9px] text-zinc-500 uppercase font-bold block mb-1">Média Diária</span>
@@ -317,7 +294,6 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
               </div>
            </div>
 
-           {/* Insight Dinâmico (Reativo) */}
            <div className="mt-auto bg-zinc-800/20 border border-white/5 rounded-xl p-3 flex gap-3 items-start animate-in fade-in">
               <div className={`p-1.5 rounded-md shrink-0 ${selectedCcCategory ? 'bg-indigo-500/20 text-indigo-400' : 'bg-yellow-500/10 text-yellow-500'}`}>
                  {selectedCcCategory ? <Zap size={14}/> : <AlertTriangle size={14}/>}
@@ -330,10 +306,7 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
            </div>
         </div>
 
-        {/* --- COLUNA DIREITA: NAVEGAÇÃO (LISTA vs DETALHE) --- */}
         <div className="flex-1 bg-zinc-950/20 relative flex flex-col">
-           
-           {/* HEADER DA COLUNA */}
            <div className="h-14 border-b border-white/5 flex items-center px-4 shrink-0">
               {selectedCcCategory ? (
                  <div className="flex items-center gap-2 w-full animate-in slide-in-from-left-2">
@@ -357,10 +330,8 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
               )}
            </div>
 
-           {/* CONTEÚDO SCROLLÁVEL */}
            <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
               {selectedCcCategory ? (
-                 // VISÃO DETALHE (Lista de Transações)
                  <div className="space-y-1 animate-in fade-in zoom-in-95 duration-200">
                     {getGroupedTransactions(selectedCcCategory).map((t, i) => (
                        <div key={i} className="flex items-center justify-between p-3 bg-zinc-900/40 border border-white/5 rounded-xl hover:bg-zinc-900/80 transition-colors">
@@ -376,7 +347,6 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
                     )}
                  </div>
               ) : (
-                 // VISÃO LISTA (Lista de Categorias)
                  <div className="space-y-1.5">
                     {data.ccCategoryData.map((cat) => (
                        <button 
@@ -390,9 +360,9 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
                                 <p className="text-xs font-bold text-zinc-300 group-hover:text-white transition-colors">{cat.name}</p>
                                 <div className="flex items-center gap-1 mt-0.5">
                                    <div className="w-16 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                                      <div className="h-full bg-zinc-500 group-hover:bg-indigo-500 transition-colors" style={{width: `${((cat.value / data.ccTotal) * 100)}%`}}></div>
+                                      <div className="h-full bg-zinc-500 group-hover:bg-indigo-500 transition-colors" style={{width: `${data.ccTotal > 0 ? ((cat.value / data.ccTotal) * 100) : 0}%`}}></div>
                                    </div>
-                                   <span className="text-[9px] text-zinc-500">{((cat.value / data.ccTotal) * 100).toFixed(0)}%</span>
+                                   <span className="text-[9px] text-zinc-500">{data.ccTotal > 0 ? ((cat.value / data.ccTotal) * 100).toFixed(0) : 0}%</span>
                                 </div>
                              </div>
                           </div>
