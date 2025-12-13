@@ -3,7 +3,7 @@
 import { createClient } from '../../lib/supabase'
 import { useState, useRef, useEffect, RefObject } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, MoreVertical, Edit2, Trash2, X, Check, CreditCard, Tag, GripVertical } from 'lucide-react'
+import { Search, Plus, MoreVertical, Edit2, Trash2, X, Check, CreditCard, Tag, GripVertical, AlertCircle } from 'lucide-react'
 import { useToast } from '../../components/ToastContext'
 
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
@@ -44,7 +44,17 @@ function SortableAccountItem({ account, index, total, openEditModal, handleDelet
       <div className="flex items-center gap-4 flex-1">
         <div {...attributes} {...listeners} className="text-zinc-600 hover:text-zinc-300 cursor-grab active:cursor-grabbing p-1 touch-none"><GripVertical size={20} /></div>
         <div className="h-10 w-10 rounded-lg flex items-center justify-center text-white shadow-lg font-bold text-lg ring-2 ring-zinc-900" style={{ backgroundColor: account.color || '#3b82f6' }}>{account.name.charAt(0).toUpperCase()}</div>
-        <div><span className="font-bold text-white block text-sm">{account.name}</span>{account.is_credit_card && (<span className="inline-flex items-center gap-1 text-[10px] text-purple-400 font-medium mt-0.5"><CreditCard size={10}/> Crédito</span>)}</div>
+        <div>
+            <span className="font-bold text-white block text-sm">{account.name}</span>
+            {account.is_credit_card && (
+                <div className="flex items-center gap-2 mt-0.5">
+                    <span className="inline-flex items-center gap-1 text-[10px] text-purple-400 font-medium"><CreditCard size={10}/> Crédito</span>
+                    {account.credit_limit && account.credit_limit > 0 && (
+                        <span className="text-[10px] text-zinc-500">Limite: R$ {account.credit_limit}</span>
+                    )}
+                </div>
+            )}
+        </div>
       </div>
       <div className="relative">
         <button onClick={(e) => { e.stopPropagation(); setOpenMenuId(isOpen ? null : account.id) }} className="p-2 text-zinc-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><MoreVertical size={18}/></button>
@@ -63,32 +73,27 @@ export default function AccountsClient({ initialAccounts }: AccountsClientProps)
   const router = useRouter()
   const supabase = createClient()
 
-  // O estado local é inicializado com os dados do servidor
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts)
   
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingAccount, setEditingAccount] = useState<Account | null>(null)
-  const [formData, setFormData] = useState({ name: '', is_credit_card: false, color: COLORS[0].hex })
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   
+  // Atualizado para incluir credit_limit
+  const [formData, setFormData] = useState({ name: '', is_credit_card: false, color: COLORS[0].hex, credit_limit: '' })
+  
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
 
-  // Atualiza o estado local se os dados do servidor mudarem (ex: refresh)
-  useEffect(() => {
-    setAccounts(initialAccounts)
-  }, [initialAccounts])
+  useEffect(() => { setAccounts(initialAccounts) }, [initialAccounts])
 
   useEffect(() => { 
-    function h(e: MouseEvent) { 
-        if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpenMenuId(null) 
-    }
+    function h(e: MouseEvent) { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpenMenuId(null) }
     document.addEventListener("mousedown", h)
     return () => document.removeEventListener("mousedown", h) 
   }, [])
 
-  // Drag and Drop: Atualização Otimista
   async function handleDragEnd(event: DragEndEvent) { 
     const { active, over } = event
     if (over && active.id !== over.id) { 
@@ -96,7 +101,7 @@ export default function AccountsClient({ initialAccounts }: AccountsClientProps)
             const oldIndex = items.findIndex((item) => item.id === active.id)
             const newIndex = items.findIndex((item) => item.id === over.id)
             const newOrder = arrayMove(items, oldIndex, newIndex)
-            saveOrderToSupabase(newOrder) // Salva no banco silenciosamente
+            saveOrderToSupabase(newOrder) 
             return newOrder 
         }) 
     } 
@@ -106,43 +111,65 @@ export default function AccountsClient({ initialAccounts }: AccountsClientProps)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const updates = updatedAccounts.map((acc, index) => ({ 
-        id: acc.id, 
-        user_id: user.id, 
-        name: acc.name, 
-        is_credit_card: acc.is_credit_card, 
-        color: acc.color, 
-        order_index: index 
+        id: acc.id, user_id: user.id, name: acc.name, 
+        is_credit_card: acc.is_credit_card, color: acc.color, 
+        order_index: index, credit_limit: acc.credit_limit // Persistir limite
     }))
     await supabase.from('accounts').upsert(updates) 
-    router.refresh() // Sincroniza o server component em background
+    router.refresh()
   }
 
-  function openNewModal() { setEditingAccount(null); setFormData({ name: '', is_credit_card: false, color: COLORS[0].hex }); setIsModalOpen(true) }
-  function openEditModal(account: Account) { setEditingAccount(account); setFormData({ name: account.name, is_credit_card: account.is_credit_card, color: account.color || COLORS[0].hex }); setOpenMenuId(null); setIsModalOpen(true) }
+  function openNewModal() { 
+      setEditingAccount(null)
+      setFormData({ name: '', is_credit_card: false, color: COLORS[0].hex, credit_limit: '' })
+      setIsModalOpen(true) 
+  }
+  
+  function openEditModal(account: Account) { 
+      setEditingAccount(account)
+      setFormData({ 
+          name: account.name, 
+          is_credit_card: account.is_credit_card, 
+          color: account.color || COLORS[0].hex,
+          credit_limit: account.credit_limit ? account.credit_limit.toString() : ''
+      })
+      setOpenMenuId(null)
+      setIsModalOpen(true) 
+  }
   
   async function handleSave(e: React.FormEvent) { 
     e.preventDefault()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user || !formData.name.trim()) return
 
+    const limitValue = formData.is_credit_card && formData.credit_limit ? parseFloat(formData.credit_limit) : 0
+
+    const payload = {
+        name: formData.name,
+        is_credit_card: formData.is_credit_card,
+        color: formData.color,
+        credit_limit: limitValue
+    }
+
     let error = null
-    // Define o índice: se for novo, vai para o final
     let newIndex = !editingAccount && accounts.length > 0 ? accounts.length : editingAccount ? editingAccount.order_index : 0
     
     if (editingAccount) {
-      const { error: err } = await supabase.from('accounts').update({ name: formData.name, is_credit_card: formData.is_credit_card, color: formData.color }).eq('id', editingAccount.id)
+      const { error: err } = await supabase.from('accounts').update(payload).eq('id', editingAccount.id)
       error = err
     } else {
-      const { error: err } = await supabase.from('accounts').insert({ user_id: user.id, name: formData.name, is_credit_card: formData.is_credit_card, color: formData.color, order_index: newIndex })
+      const { error: err } = await supabase.from('accounts').insert({ 
+          user_id: user.id, order_index: newIndex, ...payload 
+      })
       error = err
     }
 
     if (error) {
-        addToast(error.message, 'error')
+        addToast("Erro: " + error.message, 'error')
     } else {
         addToast(editingAccount ? "Conta atualizada!" : "Conta criada com sucesso!", 'success')
         setIsModalOpen(false)
-        router.refresh() // Recarrega os dados do servidor
+        router.refresh()
     }
   }
 
@@ -192,9 +219,34 @@ export default function AccountsClient({ initialAccounts }: AccountsClientProps)
           <div className="w-full max-w-md p-6 bg-zinc-900 rounded-xl border border-white/10 animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center mb-6"><h2 className="text-lg font-bold text-white">{editingAccount ? 'Editar' : 'Nova'} Despesa</h2><button onClick={() => setIsModalOpen(false)} className="text-zinc-400 hover:text-white"><X size={20} /></button></div>
             <form onSubmit={handleSave} className="space-y-6">
+              
               <div><label className="block text-xs font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">Nome</label><input autoFocus required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Ex: Netflix" className="w-full rounded-lg border border-white/10 bg-zinc-950 p-3 text-white focus:ring-2 focus:ring-indigo-500/50 outline-none placeholder:text-zinc-600 text-sm"/></div>
+              
               <div><label className="block text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">Cor</label><div className="flex flex-wrap gap-3">{COLORS.map((color) => (<button key={color.hex} type="button" onClick={() => setFormData({...formData, color: color.hex})} className={`h-8 w-8 rounded-full transition-transform hover:scale-110 flex items-center justify-center ring-offset-2 ring-offset-zinc-900 ${formData.color === color.hex ? 'ring-2 ring-indigo-500 scale-110' : ''}`} style={{ backgroundColor: color.hex }}>{formData.color === color.hex && <Check size={14} className="text-white"/>}</button>))}<div className="relative"><input type="color" id="custom-color" value={formData.color} onChange={(e) => setFormData({ ...formData, color: e.target.value })} className="sr-only" /><label htmlFor="custom-color" className={`h-8 w-8 rounded-full transition-transform hover:scale-110 flex items-center justify-center ring-offset-2 ring-offset-zinc-900 cursor-pointer bg-zinc-950 border border-white/10 ${isCustomColor ? 'ring-2 ring-indigo-500 scale-110' : ''}`}>{isCustomColor ? (<Check size={14} className="text-zinc-400" />) : (<Plus size={14} className="text-zinc-500" />)}</label></div></div></div>
-              <div className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${formData.is_credit_card ? 'bg-purple-500/10 border-purple-500/30' : 'bg-zinc-950 border-white/5 hover:bg-white/5'}`} onClick={() => setFormData({...formData, is_credit_card: !formData.is_credit_card})}><div className={`p-2 rounded-md ${formData.is_credit_card ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-zinc-500'}`}><CreditCard size={18}/></div><div><span className={`text-sm font-bold block ${formData.is_credit_card ? 'text-purple-300' : 'text-zinc-300'}`}>É Cartão de Crédito?</span><span className="text-[10px] text-zinc-500">Marca esta conta como fatura.</span></div><input type="checkbox" checked={formData.is_credit_card} readOnly className="ml-auto h-4 w-4 rounded text-purple-500 pointer-events-none bg-zinc-800 border-white/10"/></div>
+              
+              <div className={`flex flex-col gap-3 p-3 rounded-lg border transition-colors ${formData.is_credit_card ? 'bg-purple-500/10 border-purple-500/30' : 'bg-zinc-950 border-white/5'}`}>
+                  <div className="flex items-center gap-3 cursor-pointer" onClick={() => setFormData({...formData, is_credit_card: !formData.is_credit_card})}>
+                    <div className={`p-2 rounded-md ${formData.is_credit_card ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-zinc-500'}`}><CreditCard size={18}/></div>
+                    <div><span className={`text-sm font-bold block ${formData.is_credit_card ? 'text-purple-300' : 'text-zinc-300'}`}>É Cartão de Crédito?</span><span className="text-[10px] text-zinc-500">Marca esta conta como fatura.</span></div>
+                    <input type="checkbox" checked={formData.is_credit_card} readOnly className="ml-auto h-4 w-4 rounded text-purple-500 pointer-events-none bg-zinc-800 border-white/10"/>
+                  </div>
+                  
+                  {/* CAMPO DE LIMITE CONDICIONAL */}
+                  {formData.is_credit_card && (
+                      <div className="mt-2 pl-1 animate-in fade-in slide-in-from-top-2">
+                          <label className="block text-[10px] font-bold text-purple-300 uppercase mb-1.5 ml-1">Limite Disponível (R$)</label>
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            value={formData.credit_limit} 
+                            onChange={(e) => setFormData({...formData, credit_limit: e.target.value})} 
+                            placeholder="Ex: 5000.00" 
+                            className="w-full rounded-lg border border-purple-500/30 bg-black/20 p-2 text-white focus:ring-1 focus:ring-purple-500 outline-none text-sm placeholder:text-zinc-600"
+                          />
+                      </div>
+                  )}
+              </div>
+
               <div className="flex gap-3 pt-2"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2.5 border border-white/10 text-zinc-300 rounded-lg hover:bg-white/5 font-medium transition-colors text-sm">Cancelar</button><button type="submit" className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-900/20 transition-all active:scale-95 text-sm">{editingAccount ? 'Salvar' : 'Criar'}</button></div>
             </form>
           </div>

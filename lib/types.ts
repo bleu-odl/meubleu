@@ -21,6 +21,7 @@ export interface Account {
   name: string
   color: string
   is_credit_card: boolean
+  credit_limit?: number // <--- CAMPO NOVO (Opcional, pois contas normais não têm limite)
   order_index: number
   created_at?: string
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '../lib/supabase'
 import { X } from 'lucide-react'
 import { CreateExpenseDTO, Account, ExpenseType } from '../lib/types'
+import { useToast } from './ToastContext' 
 
 interface NewExpenseModalProps {
   isOpen: boolean
@@ -22,6 +23,9 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
   const [isLoading, setIsLoading] = useState(false)
 
   const [availableAccounts, setAvailableAccounts] = useState<Account[]>([])
+  
+  // Hook de Toast
+  const { addToast } = useToast() 
   const supabase = createClient()
 
   useEffect(() => {
@@ -49,39 +53,55 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name) return alert("Selecione uma conta!")
+    
+    // CORREÇÃO: Uso correto da assinatura addToast(string, type)
+    if (!name) {
+      addToast("Por favor, selecione uma conta ou categoria.", "error")
+      return
+    }
 
     setIsLoading(true)
     
-    // Objeto tipado usando DTO
-    const newExpense: CreateExpenseDTO & { recurrence_months?: number } = {
-      name,
-      value: parseFloat(amount.replace(',', '.')),
-      date,
-      type, 
-      status: 'pendente',
-      is_credit_card: isCreditCard,
-      // Campos condicionais
-      ...(type === 'fixa' && {
-        recurrence_months: parseInt(recurrence),
-        is_fixed_value: isFixedValue
-      })
-    }
+    try {
+      const newExpense: CreateExpenseDTO & { recurrence_months?: number } = {
+        name,
+        value: parseFloat(amount.replace(',', '.')),
+        date,
+        type, 
+        status: 'pendente',
+        is_credit_card: isCreditCard,
+        ...(type === 'fixa' && {
+          recurrence_months: parseInt(recurrence),
+          is_fixed_value: isFixedValue
+        })
+      }
 
-    await onSave(newExpense)
-    
-    // Resetar Form
-    setName('')
-    setAmount('')
-    setDate('')
-    setType('variavel')
-    setRecurrence('')
-    setIsFixedValue(false)
-    setIsCreditCard(false)
-    setIsLoading(false)
-    onClose()
+      await onSave(newExpense)
+      
+      // Feedback positivo simples
+      // addToast("Lançamento adicionado com sucesso!", "success")
+      // OBS: Removi o toast de sucesso daqui pois o pai (ExpensesClient) já dispara um ao receber o save.
+      // Se duplicar, aparecerão dois. Mantendo apenas reset.
+
+      // Resetar Form
+      setName('')
+      setAmount('')
+      setDate('')
+      setType('variavel')
+      setRecurrence('')
+      setIsFixedValue(false)
+      setIsCreditCard(false)
+      onClose()
+
+    } catch (error) {
+      console.error(error)
+      addToast("Ocorreu um problema ao tentar salvar.", "error")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
+  // ... (RESTANTE DO CÓDIGO JSX MANTIDO IGUAL AO ANTERIOR) ...
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="w-full max-w-md bg-zinc-900 rounded-2xl shadow-2xl p-6 border border-white/10 animate-in fade-in zoom-in-95">

@@ -5,6 +5,7 @@ import { createClient } from '../lib/supabase'
 import { X, Plus, Trash2, Tag, MoreVertical, Edit2, Save, Layers } from 'lucide-react'
 import { CardTransaction } from '../lib/types'
 import { formatCurrency, formatDate } from '../lib/utils'
+import { useToast } from './ToastContext' // <--- IMPORTADO
 
 const CATEGORIES = [
   { name: 'Alimentação', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
@@ -26,6 +27,7 @@ interface CreditCardModalProps {
 }
 
 export default function CreditCardModal({ isOpen, onClose, expenseId, expenseName, onUpdateTotal }: CreditCardModalProps) {
+  const { addToast } = useToast() // <--- HOOK
   const [items, setItems] = useState<CardTransaction[]>([])
   
   const [desc, setDesc] = useState('')
@@ -73,7 +75,6 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
       setItems(data as CardTransaction[])
       const sum = data.reduce((acc, curr) => acc + curr.amount, 0)
       setTotal(sum)
-      // Atualiza o valor total da despesa pai apenas para garantir a sinc do front
       onUpdateTotal()
     }
     setLoading(false)
@@ -92,7 +93,6 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
         const inputVal = parseFloat(amount.replace(',', '.'))
         const numInstallments = isInstallment ? parseInt(installments) : 1
 
-        // Chamada única para a Procedure no banco (MUITO mais seguro e rápido)
         const { error } = await supabase.rpc('create_card_transaction_installments', {
             p_user_id: user.id,
             p_card_name: expenseName,
@@ -109,10 +109,11 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
         setAmount('')
         setIsInstallment(false)
         setInstallments('2')
+        addToast("Gasto adicionado!", 'success') // <--- SUCESSO
         fetchItems() 
 
     } catch (error: any) {
-        alert('Erro ao processar: ' + error.message)
+        addToast('Erro ao processar: ' + error.message, 'error') // <--- ERRO
     } finally {
         setLoading(false)
     }
@@ -139,8 +140,9 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
         created_at: new Date(editValues.date).toISOString()
     }).eq('id', id)
 
-    if (error) { alert("Erro: " + error.message) } else {
-      // Recalcular total da despesa localmente
+    if (error) { 
+        addToast("Erro: " + error.message, 'error') // <--- ERRO
+    } else {
       const { data: allItems } = await supabase.from('card_transactions').select('amount').eq('expense_id', expenseId)
       if (allItems) {
         const newTotal = allItems.reduce((acc, curr) => acc + curr.amount, 0)
@@ -148,6 +150,7 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
         setTotal(newTotal)
         onUpdateTotal()
       }
+      addToast("Item atualizado", 'success') // <--- SUCESSO
       fetchItems()
       setEditingId(null)
     }
@@ -158,18 +161,21 @@ export default function CreditCardModal({ isOpen, onClose, expenseId, expenseNam
     const { error } = await supabase.from('card_transactions').delete().eq('id', id)
     
     if (!error) {
-       // Após deletar, precisamos atualizar o total da fatura
        const { data: allItems } = await supabase.from('card_transactions').select('amount').eq('expense_id', expenseId)
        const newTotal = allItems ? allItems.reduce((acc, curr) => acc + curr.amount, 0) : 0
        await supabase.from('expenses').update({ value: newTotal }).eq('id', expenseId)
        setTotal(newTotal)
        onUpdateTotal()
+       addToast("Item removido", 'success') // <--- SUCESSO
        fetchItems() 
+    } else {
+       addToast("Erro ao remover", 'error')
     }
   }
 
   function handleToggleMenu(id: string) { if (openMenuId === id) setOpenMenuId(null); else setOpenMenuId(id) }
   
+  // ... (RESTANTE DO CÓDIGO MANTIDO IGUAL - Renderização) ...
   let previewText = ''
   if (amount && isInstallment) {
     const val = parseFloat(amount.replace(',', '.'))

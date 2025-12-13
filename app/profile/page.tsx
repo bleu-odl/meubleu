@@ -5,12 +5,12 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   User, LogOut, Shield, Lock, Save, 
-  Camera, AlertTriangle, Edit2, Eye, EyeOff, Check, X, Crown, Settings
+  Camera, AlertTriangle, Edit2, Eye, EyeOff, Check, X, Crown, Settings, Trash2 
 } from 'lucide-react' 
 import { useToast } from '../../components/ToastContext'
 
 export default function ProfilePage() {
-  const { addToast } = useToast()
+  const { addToast } = useToast() // Hook de Toast
 
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -24,6 +24,11 @@ export default function ProfilePage() {
   const [passwordStrength, setPasswordStrength] = useState(0)
   const [loadingPass, setLoadingPass] = useState(false)
   const [loadingSave, setLoadingSave] = useState(false)
+
+  // Estado para confirmação de exclusão (UX melhorada)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [loadingDelete, setLoadingDelete] = useState(false)
 
   const supabase = createClient()
   const router = useRouter()
@@ -83,7 +88,7 @@ export default function ProfilePage() {
       setProfile({ ...profile, ...updates })
       setIsEditing(false)
       addToast("Perfil atualizado com sucesso!", 'success')
-      window.location.reload() 
+      router.refresh() // MELHORIA UX: Atualiza sem recarregar a página toda
     }
     setLoadingSave(false)
   }
@@ -105,13 +110,21 @@ export default function ProfilePage() {
   }
 
   async function handleDeleteAccount() {
-    const confirmText = prompt("Para confirmar, digite 'ENCERRAR':")
-    if (confirmText !== 'ENCERRAR') return
+    // MELHORIA UX: Validação integrada em vez de prompt()
+    if (deleteConfirmation !== 'ENCERRAR') {
+        addToast("Digite ENCERRAR para confirmar.", 'error')
+        return
+    }
 
+    setLoadingDelete(true)
     const { error } = await supabase.from('users').delete().eq('id', profile.id)
-    if (error) { addToast("Erro ao deletar conta: " + error.message, 'error') } 
-    else {
+    
+    if (error) { 
+        addToast("Erro ao deletar conta: " + error.message, 'error')
+        setLoadingDelete(false)
+    } else {
       await supabase.auth.signOut()
+      addToast("Conta encerrada. Até logo.", 'info')
       router.push('/login')
     }
   }
@@ -129,7 +142,7 @@ export default function ProfilePage() {
   if (loading) return <div className="p-8 text-center text-zinc-500">Carregando...</div>
 
   return (
-    <div className="min-h-screen p-8 pb-32">
+    <div className="min-h-screen p-8 pb-32 animate-in fade-in duration-500">
       <div className="mx-auto max-w-3xl space-y-6">
         
         {/* CABEÇALHO */}
@@ -346,25 +359,59 @@ export default function ProfilePage() {
             </div>
         </div>
 
-        {/* ZONA DE PERIGO */}
-        <div className="card rounded-2xl p-8 relative overflow-hidden border-red-500/20 group hover:border-red-500/40 transition-colors">
-            <div className="absolute top-0 left-0 w-1 h-full bg-red-500 transition-all group-hover:w-1.5"></div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+        {/* ZONA DE PERIGO (UX CORRIGIDA) */}
+        <div className={`card rounded-2xl p-8 relative overflow-hidden transition-all duration-300 ${isDeleting ? 'border-red-500/50 bg-red-500/5' : 'border-red-500/20 hover:border-red-500/40'}`}>
+            <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
+            
+            <div className="flex flex-col sm:flex-row items-start gap-6">
                 <div className="p-4 bg-red-500/10 rounded-full text-red-500 shrink-0">
                     <AlertTriangle size={24} />
                 </div>
-                <div className="flex-1">
+                
+                <div className="flex-1 w-full">
                     <h2 className="text-lg font-bold text-white mb-1">Encerrar conta</h2>
-                    <p className="text-sm text-zinc-400">
+                    <p className="text-sm text-zinc-400 mb-4">
                         Esta ação é irreversível. Todos os seus dados serão apagados permanentemente.
                     </p>
+
+                    {isDeleting ? (
+                        <div className="animate-in fade-in slide-in-from-top-2">
+                             <label className="block text-xs font-bold text-red-400 uppercase mb-2">
+                                Para confirmar, digite <span className="select-all bg-red-500/20 px-1 rounded">ENCERRAR</span> abaixo:
+                             </label>
+                             <div className="flex gap-3">
+                                <input 
+                                    autoFocus
+                                    type="text" 
+                                    value={deleteConfirmation}
+                                    onChange={(e) => setDeleteConfirmation(e.target.value)}
+                                    className="flex-1 rounded-xl border border-red-500/30 bg-zinc-950 p-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 outline-none placeholder:text-zinc-700"
+                                    placeholder="ENCERRAR"
+                                />
+                                <button
+                                    onClick={handleDeleteAccount}
+                                    disabled={deleteConfirmation !== 'ENCERRAR' || loadingDelete}
+                                    className="px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-900/20"
+                                >
+                                    {loadingDelete ? 'Apagando...' : 'Confirmar Exclusão'}
+                                </button>
+                                <button
+                                    onClick={() => { setIsDeleting(false); setDeleteConfirmation('') }}
+                                    className="px-4 py-2.5 border border-white/10 text-zinc-400 hover:text-white rounded-xl text-sm font-bold transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                             </div>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => setIsDeleting(true)}
+                            className="px-5 py-2.5 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2"
+                        >
+                            <Trash2 size={16}/> Encerrar Conta
+                        </button>
+                    )}
                 </div>
-                <button
-                    onClick={handleDeleteAccount}
-                    className="px-5 py-2.5 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-xl text-sm font-bold transition-all whitespace-nowrap"
-                >
-                    Encerrar Conta
-                </button>
             </div>
         </div>
 

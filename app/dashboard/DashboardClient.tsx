@@ -9,12 +9,12 @@ import {
 import { 
   TrendingUp, TrendingDown, DollarSign, CalendarClock, Wallet, 
   AlertTriangle, ChevronDown, Lightbulb, Activity, Lock, 
-  PieChart, ArrowLeft, Target, Zap, ChevronRight 
+  PieChart, ArrowLeft, Target, Zap, ChevronRight, CreditCard 
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '../../lib/utils'
 import { useState, useEffect, useMemo, useTransition } from 'react'
 import UpgradeModal from '../../components/UpgradeModal'
-import { getAccountYearlyData } from '../actions/dashboard-data' // <--- Importando a Server Action
+import { getAccountYearlyData } from '../actions/dashboard-data'
 
 const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 const years = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i)
@@ -37,7 +37,7 @@ interface DashboardProps {
     ccTotal: number
     ccTransactions: any[]
     accountNames: string[]
-    // Removido rawYearExpenses
+    totalCreditLimit: number
   }
   userProfile: { name: string, plan: string }
   selectedMonth: number
@@ -47,24 +47,24 @@ interface DashboardProps {
 export default function DashboardClient({ data, userProfile, selectedMonth, selectedYear }: DashboardProps) {
   const router = useRouter()
   
-  // Estados Locais
   const [chartFilter, setChartFilter] = useState('all')
   const [selectedAccount, setSelectedAccount] = useState(data.accountNames[0] || '')
   const [specificChartData, setSpecificChartData] = useState<any[]>([])
-  const [isPending, startTransition] = useTransition() // Para loading suave
+  const [isPending, startTransition] = useTransition()
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   
   const [selectedCcCategory, setSelectedCcCategory] = useState<string | null>(null)
 
   const currentBalance = data.totalIncome - data.currentMonthTotal
   const isSpendingMore = data.percentageChange > 0
-  const mockCreditLimit = 5000; 
 
-  // --- NOVA LÓGICA: Buscar dados da conta específica via Server Action ---
+  // Se o usuário não definiu limite, usamos 0 para não mostrar dados falsos, 
+  // ou mantemos um fallback visual se preferir, mas aqui vamos priorizar o dado real.
+  const activeCreditLimit = data.totalCreditLimit > 0 ? data.totalCreditLimit : 0;
+  
   useEffect(() => {
     if (selectedAccount) {
       startTransition(async () => {
-        // Chama o servidor para pegar apenas os dados necessários
         const chartData = await getAccountYearlyData(selectedYear, selectedAccount)
         setSpecificChartData(chartData)
       })
@@ -80,7 +80,6 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
     return rawList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }
 
-  // Cálculos do Painel Fatura
   const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate()
   const today = new Date()
   const isCurrentMonth = today.getMonth() === selectedMonth && today.getFullYear() === selectedYear
@@ -88,16 +87,25 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
   const dailyAvg = data.ccTotal / (dayCount || 1)
   const projection = isCurrentMonth ? dailyAvg * daysInMonth : data.ccTotal
 
+  // Cálculos visuais da barra de limite
+  const limitUsedPercent = activeCreditLimit > 0 ? (data.ccTotal / activeCreditLimit) * 100 : 0
+  const limitAvailable = activeCreditLimit - data.ccTotal
+  let limitBarColor = 'bg-indigo-500'
+  if (limitUsedPercent > 100) limitBarColor = 'bg-red-500'
+  else if (limitUsedPercent > 80) limitBarColor = 'bg-yellow-500'
+
   const dynamicInsightText = useMemo(() => {
     if (selectedCcCategory) {
        const catVal = data.ccCategoryData.find(c => c.name === selectedCcCategory)?.value || 0
        const percent = data.ccTotal > 0 ? ((catVal / data.ccTotal) * 100).toFixed(1) : '0'
        return `Você gastou ${formatCurrency(catVal)} em ${selectedCcCategory}. Isso representa ${percent}% da sua fatura.`
     }
-    if (projection > mockCreditLimit) return `Atenção: A projeção (${formatCurrency(projection)}) indica risco de estourar o limite de ${formatCurrency(mockCreditLimit)}.`
+    
+    if (projection > activeCreditLimit && activeCreditLimit > 0) return `Atenção: A projeção (${formatCurrency(projection)}) indica risco de estourar seu limite de ${formatCurrency(activeCreditLimit)}.`
     if (isCurrentMonth && projection > data.ccTotal * 1.2) return `Cuidado: O ritmo de gastos diários (${formatCurrency(dailyAvg)}) está alto para o início do mês.`
+    
     return "Seus gastos parecem controlados. Nenhuma anomalia crítica detectada nesta fatura."
-  }, [selectedCcCategory, projection, dailyAvg, data.ccTotal, data.ccCategoryData, mockCreditLimit, isCurrentMonth])
+  }, [selectedCcCategory, projection, dailyAvg, data.ccTotal, data.ccCategoryData, activeCreditLimit, isCurrentMonth])
 
   let scoreTextColor = 'text-red-400', scoreLabel = 'Crítico', scoreDesc = 'Seus gastos estão excedendo sua renda.'
   if (data.healthScore >= 80) { scoreTextColor = 'text-indigo-400'; scoreLabel = 'Excelente'; scoreDesc = 'Parabéns! Você está poupando muito.' }
@@ -120,7 +128,6 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
         </div>
 
         <div className="flex items-center gap-6">
-          {/* TOOLTIP DO SCORE */}
           <div className="relative group cursor-help text-right">
               <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 block mb-1">Score</span>
               <div className={`text-3xl font-bold ${scoreTextColor} leading-none flex items-center justify-end gap-2`}>
@@ -155,7 +162,7 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
         </div>
       </div>
 
-      {/* KPI CARDS (Mantidos iguais) */}
+      {/* KPI CARDS */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className={cardClass}>
           <div className="space-y-1"><p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Gastos do mês</p><h3 className="text-2xl font-bold text-white tracking-tight">{formatCurrency(data.currentMonthTotal)}</h3></div>
@@ -220,7 +227,6 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
             </div>
           </div>
           
-          {/* GRÁFICO DINÂMICO POR CONTA */}
           <div className="card rounded-2xl">
             <div className="mb-6 flex items-center justify-between">
               <div><h3 className="text-base font-semibold text-white">Evolução por Categoria</h3><p className="text-xs text-zinc-500">Histórico anual</p></div>
@@ -229,13 +235,11 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
               </select>
             </div>
             <div className="h-[250px] w-full relative">
-              {/* Overlay de Loading */}
               {isPending && (
                   <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] z-10 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-indigo-500"></div>
                   </div>
               )}
-              
               {specificChartData.length > 0 && selectedAccount ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={specificChartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
@@ -253,7 +257,6 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
           </div>
       </div>
 
-      {/* PAINEL DE FATURA (Mantido igual, apenas props atualizadas) */}
       <div className="card rounded-2xl relative overflow-hidden flex flex-col md:flex-row min-h-[420px]">
         {userProfile.plan === 'free' && <div className="absolute inset-0 bg-zinc-950/90 backdrop-blur-sm z-30 flex flex-col items-center justify-center text-center p-6"><div className="bg-zinc-800 p-3 rounded-full mb-3"><Lock className="text-yellow-400" size={20} /></div><h3 className="text-base font-bold text-white">Painel de Fatura Pro</h3><p className="text-xs text-zinc-400 mb-4 max-w-xs">Desbloqueie análises de projeção, impacto por categoria e micro-insights.</p><button onClick={() => setShowUpgradeModal(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-full text-xs font-bold transition-all active:scale-95 shadow-lg shadow-indigo-900/20">Desbloquear Premium</button></div>}
 
@@ -266,8 +269,39 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
               <p className="text-[11px] text-zinc-500 mt-1 ml-10">Análise de impacto e projeção</p>
            </div>
            
-           {/* Gráfico Analítico */}
-           <div className="h-[160px] w-full mb-4">
+           {/* --- NOVO: BARRA DE LIMITE VISUAL --- */}
+           {activeCreditLimit > 0 && (
+             <div className="mb-5 bg-zinc-950/50 p-3 rounded-xl border border-white/5 animate-in fade-in slide-in-from-top-2">
+               <div className="flex justify-between items-end mb-2">
+                 <div>
+                   <span className="text-[10px] font-bold text-zinc-500 uppercase block tracking-wider">Comprometido</span>
+                   <span className="text-xs font-bold text-white flex items-center gap-1">
+                      {limitUsedPercent.toFixed(1)}% <CreditCard size={10} className="text-zinc-600"/>
+                   </span>
+                 </div>
+                 <div className="text-right">
+                   <span className="text-[10px] font-bold text-zinc-500 uppercase block tracking-wider">Disponível</span>
+                   <span className={`text-xs font-bold ${limitAvailable < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                     {formatCurrency(limitAvailable)}
+                   </span>
+                 </div>
+               </div>
+               
+               {/* Barra de Progresso Animada */}
+               <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-1.5">
+                 <div 
+                   className={`h-full rounded-full transition-all duration-700 ease-out ${limitBarColor}`}
+                   style={{ width: `${Math.min(limitUsedPercent, 100)}%` }}
+                 ></div>
+               </div>
+               
+               <div className="text-right">
+                  <span className="text-[9px] text-zinc-600">Limite Total: {formatCurrency(activeCreditLimit)}</span>
+               </div>
+             </div>
+           )}
+
+           <div className="h-[140px] w-full mb-4">
              {data.ccCategoryData.length > 0 ? (
                <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.ccCategoryData.slice(0, 5)} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
