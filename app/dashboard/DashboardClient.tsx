@@ -1,7 +1,6 @@
 'use client'
 
 import AIFlashTips from '../../components/AIFlashTips'
-import AIInsightsCard from '../../components/AIInsightsCard'
 import { useRouter } from 'next/navigation'
 import { 
   BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, CartesianGrid, 
@@ -290,11 +289,6 @@ export default function DashboardClient({ data, userProfile, selectedMonth, sele
               </div>
             </div>
         </div>
-      </div>
-
-      {/* --- 2. ÁREA DO CONSULTOR IA --- */}
-      <div className="grid grid-cols-1">
-          <AIInsightsCard userPlan={userProfile.plan} />
       </div>
 
       <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
